@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Action pour le dashboard -->
+        <record id="action_dashboard_projet" model="ir.actions.client">
+            <field name="name">Dashboard Projet</field>
+            <field name="tag">dashboard_projet.dashboard</field>
+            <!-- <field name="target">current</field> -->
+        </record>
+
+        <!-- Menu principal -->
+        <menuitem id="menu_dashboard_projet_main" 
+                  name="Dashboard Projet" 
+                  sequence="5"/>
+
+        <!-- Sous-menu Dashboard -->
+        <menuitem id="menu_dashboard_projet_dashboard" 
+                  name="Tableau de Bord" 
+                  parent="menu_dashboard_projet_main" 
+                  action="action_dashboard_projet" 
+                  sequence="1"/>
+
+        <!-- Action pour la configuration (optionnel) -->
+        <record id="action_dashboard_projet_config" model="ir.actions.act_window">
+            <field name="name">Configuration Dashboard</field>
+            <field name="res_model">dashboard.projet</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <!-- Menu Configuration -->
+        <menuitem id="menu_dashboard_projet_config" 
+                  name="Configuration" 
+                  parent="menu_dashboard_projet_main" 
+                  action="action_dashboard_projet_config" 
+                  sequence="10"
+                  groups="project.group_project_manager"/>
+
+        <!-- Vue formulaire pour le modèle dashboard.projet -->
+        <record id="view_dashboard_projet_form" model="ir.ui.view">
+            <field name="name">dashboard.projet.form</field>
+            <field name="model">dashboard.projet</field>
+            <field name="arch" type="xml">
+                <form string="Dashboard Projet">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="date_debut"/>
+                            <field name="date_fin"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Vue liste pour le modèle dashboard.projet -->
+        <record id="view_dashboard_projet_tree" model="ir.ui.view">
+            <field name="name">dashboard.projet.tree</field>
+            <field name="model">dashboard.projet</field>
+            <field name="arch" type="xml">
+                <tree string="Dashboard Projet">
+                    <field name="name"/>
+                    <field name="date_debut"/>
+                    <field name="date_fin"/>
+                </tree>
+            </field>
+        </record>
+    </data>
+</odoo>
