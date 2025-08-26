@@ -149,6 +149,219 @@ class DashboardProjet extends Component {
         return date.toISOString().split('T')[0];
     }
 
+    // Ajouter ces méthodes à la classe DashboardProjet
+
+    // ===== GRAPHIQUES =====
+
+    /**
+     * Initialise les graphiques avec Chart.js
+     */
+    _initGraphiques() {
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js non disponible, les graphiques seront désactivés');
+            return;
+        }
+
+        this._destroyGraphiques(); // Nettoyer les anciens graphiques
+
+        // Graphique à barres - CA par projet
+        this._initGraphiqueCA();
+
+        // Graphique circulaire - Répartition des statuts
+        this._initGraphiqueStatuts();
+
+        // Graphique linéaire - Évolution mensuelle du CA
+        this._initGraphiqueEvolution();
+    }
+
+    /**
+     * Initialise le graphique à barres pour le CA par projet
+     */
+    _initGraphiqueCA() {
+        const ctx = document.getElementById('graphique-ca');
+        if (!ctx) return;
+
+        const data = this.state.dashboardData.graphique_data?.graphique_ca || {};
+        
+        this.graphiqueCA = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    label: 'Chiffre d\'affaires par projet (€)',
+                    data: data.data || [],
+                    backgroundColor: data.backgroundColors || '#007bff',
+                    borderColor: 'rgba(0, 123, 255, 0.8)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'CA par Projet',
+                        font: { size: 16, weight: 'bold' }
+                    },
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                return `CA: ${this.formatCurrency(context.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => {
+                                if (value >= 1000) {
+                                    return '€' + (value / 1000).toFixed(1) + 'k';
+                                }
+                                return '€' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Initialise le graphique circulaire pour la répartition des statuts
+     */
+    _initGraphiqueStatuts() {
+        const ctx = document.getElementById('graphique-statuts');
+        if (!ctx) return;
+
+        const data = this.state.dashboardData.graphique_data?.graphique_statuts || {};
+        
+        this.graphiqueStatuts = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    data: data.data || [],
+                    backgroundColor: data.backgroundColors || ['#007bff', '#28a745', '#ffc107'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Répartition par Statut',
+                        font: { size: 16, weight: 'bold' }
+                    },
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 15,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${context.label}: ${context.raw} projet(s) (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Initialise le graphique linéaire pour l'évolution mensuelle du CA
+     */
+    _initGraphiqueEvolution() {
+        const ctx = document.getElementById('graphique-evolution');
+        if (!ctx) return;
+
+        const data = this.state.dashboardData.graphique_data?.graphique_evolution || {};
+        
+        this.graphiqueEvolution = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    label: 'Évolution du CA (€)',
+                    data: data.data || [],
+                    fill: true,
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderColor: '#007bff',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#007bff',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Évolution Mensuelle du CA',
+                        font: { size: 16, weight: 'bold' }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                return `CA: ${this.formatCurrency(context.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => {
+                                if (value >= 1000) {
+                                    return '€' + (value / 1000).toFixed(1) + 'k';
+                                }
+                                return '€' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Détruit tous les graphiques existants
+     */
+    _destroyGraphiques() {
+        if (this.graphiqueCA) {
+            this.graphiqueCA.destroy();
+            this.graphiqueCA = null;
+        }
+        if (this.graphiqueStatuts) {
+            this.graphiqueStatuts.destroy();
+            this.graphiqueStatuts = null;
+        }
+        if (this.graphiqueEvolution) {
+            this.graphiqueEvolution.destroy();
+            this.graphiqueEvolution = null;
+        }
+    }
+
+    // Mettre à jour la méthode loadDashboardData pour initialiser les graphiques
     async loadDashboardData() {
         if (this.state.loadingStates.dashboard) {
             console.log("⏳ Chargement déjà en cours, ignoré");
@@ -181,6 +394,9 @@ class DashboardProjet extends Component {
                 await this._loadProjectMargins();
             }
 
+            // Initialiser les graphiques après le chargement des données
+            this._initGraphiques();
+
             this.retryCount = 0; // Reset retry count on success
             this._showNotification("Données chargées avec succès", { type: "success" });
             
@@ -193,6 +409,113 @@ class DashboardProjet extends Component {
             this.state.loading = false;
             this.state.loadingStates.dashboard = false;
         }
+    }
+
+    // Mettre à jour la méthode _validateAndNormalizeDashboardData
+    _validateAndNormalizeDashboardData(data) {
+        const normalized = this._getEmptyDashboardData();
+
+        if (data && typeof data === 'object') {
+            normalized.chiffre_affaires = this._safeNumber(data.chiffre_affaires);
+            
+            if (Array.isArray(data.projets)) {
+                normalized.projets = data.projets.map(this._validateProjectData.bind(this));
+            }
+            
+            if (data.marge_administrative && typeof data.marge_administrative === 'object') {
+                const ma = data.marge_administrative;
+                normalized.marge_administrative = {
+                    ca_total: this._safeNumber(ma.ca_total),
+                    cout_admin: this._safeNumber(ma.cout_admin),
+                    marge_admin: this._safeNumber(ma.marge_admin),
+                    taux_marge_admin: this._safeNumber(ma.taux_marge_admin)
+                };
+            }
+            
+            // Données budget
+            if (data.budget_data && typeof data.budget_data === 'object') {
+                const bd = data.budget_data;
+                normalized.budget_data = {
+                    total_budget: this._safeNumber(bd.total_budget),
+                    budget_utilise: this._safeNumber(bd.budget_utilise),
+                    budget_restant: this._safeNumber(bd.budget_restant),
+                    taux_utilisation: this._safeNumber(bd.taux_utilisation),
+                    projets_budget: Array.isArray(bd.projets_budget) ? 
+                        bd.projets_budget.map(projet => ({
+                            id: projet.id || 0,
+                            name: projet.name || 'Projet sans nom',
+                            budget: this._safeNumber(projet.budget),
+                            ca_realise: this._safeNumber(projet.ca_realise),
+                            taux_utilisation: this._safeNumber(projet.taux_utilisation),
+                            budget_restant: this._safeNumber(projet.budget_restant)
+                        })) : []
+                };
+            }
+            
+            // Données graphiques
+            if (data.graphique_data && typeof data.graphique_data === 'object') {
+                const gd = data.graphique_data;
+                normalized.graphique_data = {
+                    graphique_ca: gd.graphique_ca || { labels: [], data: [], backgroundColors: [] },
+                    graphique_statuts: gd.graphique_statuts || { labels: [], data: [], backgroundColors: [] },
+                    graphique_evolution: gd.graphique_evolution || { labels: [], data: [] }
+                };
+            }
+        }
+
+        return normalized;
+    }
+
+    // Mettre à jour la méthode _getEmptyDashboardData
+    _getEmptyDashboardData() {
+        return {
+            chiffre_affaires: 0,
+            projets: [],
+            marge_administrative: {
+                ca_total: 0,
+                cout_admin: 0,
+                marge_admin: 0,
+                taux_marge_admin: 0
+            },
+            budget_data: {
+                total_budget: 0,
+                budget_utilise: 0,
+                budget_restant: 0,
+                taux_utilisation: 0,
+                projets_budget: []
+            },
+            graphique_data: {
+                graphique_ca: { labels: [], data: [], backgroundColors: [] },
+                graphique_statuts: { labels: [], data: [], backgroundColors: [] },
+                graphique_evolution: { labels: [], data: [] }
+            }
+        };
+    }
+
+    // Ajouter la méthode willDestroy pour nettoyer les graphiques
+    willDestroy() {
+        if (this.dateChangeTimeout) {
+            clearTimeout(this.dateChangeTimeout);
+        }
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+        }
+        
+        // Détruire les graphiques
+        this._destroyGraphiques();
+    }
+
+    // Ajouter des helpers pour les données budget
+    getBudgetUtilisationClass(taux) {
+        if (taux <= 70) return "bg-success";
+        if (taux <= 90) return "bg-warning text-dark";
+        return "bg-danger";
+    }
+
+    getBudgetUtilisationText(taux) {
+        if (taux <= 70) return "Sous contrôle";
+        if (taux <= 90) return "Attention";
+        return "Dépassement";
     }
 
     async _loadDataWithFallback() {
@@ -301,30 +624,6 @@ class DashboardProjet extends Component {
     }
 
     // ===== DATA VALIDATION =====
-    
-    _validateAndNormalizeDashboardData(data) {
-        const normalized = this._getEmptyDashboardData();
-
-        if (data && typeof data === 'object') {
-            normalized.chiffre_affaires = this._safeNumber(data.chiffre_affaires);
-            
-            if (Array.isArray(data.projets)) {
-                normalized.projets = data.projets.map(this._validateProjectData.bind(this));
-            }
-            
-            if (data.marge_administrative && typeof data.marge_administrative === 'object') {
-                const ma = data.marge_administrative;
-                normalized.marge_administrative = {
-                    ca_total: this._safeNumber(ma.ca_total),
-                    cout_admin: this._safeNumber(ma.cout_admin),
-                    marge_admin: this._safeNumber(ma.marge_admin),
-                    taux_marge_admin: this._safeNumber(ma.taux_marge_admin)
-                };
-            }
-        }
-
-        return normalized;
-    }
 
     _validateProjectData(projet) {
         return {
@@ -954,19 +1253,6 @@ class DashboardProjet extends Component {
     }
 
     // ===== UTILITY METHODS =====
-    
-    _getEmptyDashboardData() {
-        return {
-            chiffre_affaires: 0,
-            projets: [],
-            marge_administrative: {
-                ca_total: 0,
-                cout_admin: 0,
-                marge_admin: 0,
-                taux_marge_admin: 0
-            }
-        };
-    }
 
     _getEmptyMargeData() {
         return {
@@ -1046,15 +1332,6 @@ class DashboardProjet extends Component {
     }
 
     // ===== CLEANUP =====
-    
-    willDestroy() {
-        if (this.dateChangeTimeout) {
-            clearTimeout(this.dateChangeTimeout);
-        }
-        if (this.healthCheckInterval) {
-            clearInterval(this.healthCheckInterval);
-        }
-    }
 }
 
 // Register the component

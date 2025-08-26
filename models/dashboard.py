@@ -553,54 +553,6 @@ class DashboardProjet(models.Model):
             _logger.warning(f"Erreur calcul coût administratif: {str(e)}")
             return 0
 
-    @api.model
-    def get_dashboard_data(self, date_debut=None, date_fin=None):
-        """Méthode principale pour récupérer toutes les données du dashboard"""
-        try:
-            _logger.info(f"Récupération données dashboard: {date_debut} à {date_fin}")
-            
-            result = {
-                'chiffre_affaires': 0.0,
-                'projets': [],
-                'marge_administrative': {
-                    'ca_total': 0.0,
-                    'cout_admin': 0.0,
-                    'marge_admin': 0.0,
-                    'taux_marge_admin': 0.0
-                }
-            }
-            
-            # Calcul séquentiel avec gestion d'erreur
-            try:
-                result['chiffre_affaires'] = float(self.get_chiffre_affaires(date_debut, date_fin))
-            except Exception as e:
-                _logger.error(f"Erreur CA: {str(e)}")
-            
-            try:
-                result['projets'] = self.get_projets_data(date_debut, date_fin)
-            except Exception as e:
-                _logger.error(f"Erreur projets: {str(e)}")
-            
-            try:
-                result['marge_administrative'] = self.get_marge_administrative(date_debut, date_fin)
-            except Exception as e:
-                _logger.error(f"Erreur marge admin: {str(e)}")
-            
-            return result
-            
-        except Exception as e:
-            _logger.error(f"Erreur critique dashboard: {str(e)}")
-            return {
-                'chiffre_affaires': 0.0,
-                'projets': [],
-                'marge_administrative': {
-                    'ca_total': 0.0,
-                    'cout_admin': 0.0,
-                    'marge_admin': 0.0,
-                    'taux_marge_admin': 0.0
-                }
-            }
-
     # Méthodes utilitaires
     def _model_exists(self, model_name):
         """Vérifie si un modèle existe"""
@@ -775,3 +727,259 @@ class DashboardProjet(models.Model):
         except Exception as e:
             _logger.error(f"Erreur test marge: {str(e)}")
             return {'error': str(e), 'details': str(e.__class__.__name__)}
+
+    # Ajouter ces méthodes à la classe DashboardProjet
+
+    @api.model
+    def get_budget_data(self, date_debut=None, date_fin=None):
+        """Récupération des données budgétaires"""
+        try:
+            budget_data = {
+                'total_budget': 0.0,
+                'budget_utilise': 0.0,
+                'budget_restant': 0.0,
+                'taux_utilisation': 0.0,
+                'projets_budget': []
+            }
+            
+            if not self._model_exists('project.project'):
+                return budget_data
+            
+            # Récupérer les projets avec budget
+            domain = [('budget', '>', 0)]
+            if date_debut and self._field_exists('project.project', 'date_start'):
+                domain.append(('date_start', '>=', date_debut))
+            if date_fin and self._field_exists('project.project', 'date'):
+                domain.append(('date', '<=', date_fin))
+            
+            projets = self.env['project.project'].search(domain)
+            
+            total_budget = sum(projet.budget for projet in projets if projet.budget)
+            total_ca = 0
+            
+            for projet in projets:
+                ca_projet = self._get_ca_projet_optimized(projet, date_debut, date_fin)
+                total_ca += ca_projet
+                
+                taux_utilisation = (ca_projet / projet.budget * 100) if projet.budget > 0 else 0
+                
+                budget_data['projets_budget'].append({
+                    'id': projet.id,
+                    'name': projet.name,
+                    'budget': projet.budget,
+                    'ca_realise': ca_projet,
+                    'taux_utilisation': taux_utilisation,
+                    'budget_restant': max(0, projet.budget - ca_projet)
+                })
+            
+            budget_data['total_budget'] = total_budget
+            budget_data['budget_utilise'] = total_ca
+            budget_data['budget_restant'] = max(0, total_budget - total_ca)
+            budget_data['taux_utilisation'] = (total_ca / total_budget * 100) if total_budget > 0 else 0
+            
+            return budget_data
+            
+        except Exception as e:
+            _logger.error(f"Erreur récupération données budget: {str(e)}")
+            return {
+                'total_budget': 0.0,
+                'budget_utilise': 0.0,
+                'budget_restant': 0.0,
+                'taux_utilisation': 0.0,
+                'projets_budget': []
+            }
+
+    @api.model
+    def get_graphique_data(self, date_debut=None, date_fin=None):
+        """Prépare les données pour les graphiques"""
+        try:
+            # Données pour graphique à barres (CA par projet)
+            projets_data = self.get_projets_data(date_debut, date_fin)
+            graphique_ca = {
+                'labels': [],
+                'data': [],
+                'backgroundColors': []
+            }
+            
+            # Couleurs pour le graphique
+            colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', 
+                    '#20c997', '#fd7e14', '#e83e8c', '#6c757d', '#17a2b8']
+            
+            for i, projet in enumerate(projets_data):
+                if projet['ca'] > 0:  # N'afficher que les projets avec CA
+                    graphique_ca['labels'].append(projet['name'][:20] + '...' if len(projet['name']) > 20 else projet['name'])
+                    graphique_ca['data'].append(projet['ca'])
+                    graphique_ca['backgroundColors'].append(colors[i % len(colors)])
+            
+            # Données pour graphique circulaire (Répartition statuts)
+            statuts = {}
+            for projet in projets_data:
+                statut = projet['stage']
+                statuts[statut] = statuts.get(statut, 0) + 1
+            
+            graphique_statuts = {
+                'labels': list(statuts.keys()),
+                'data': list(statuts.values()),
+                'backgroundColors': colors[:len(statuts)]
+            }
+            
+            # Données pour graphique linéaire (Évolution mensuelle du CA)
+            graphique_evolution = self._get_evolution_mensuelle_ca(date_debut, date_fin)
+            
+            return {
+                'graphique_ca': graphique_ca,
+                'graphique_statuts': graphique_statuts,
+                'graphique_evolution': graphique_evolution
+            }
+            
+        except Exception as e:
+            _logger.error(f"Erreur préparation données graphiques: {str(e)}")
+            return {
+                'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
+                'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
+                'graphique_evolution': {'labels': [], 'data': []}
+            }
+
+    def _get_evolution_mensuelle_ca(self, date_debut=None, date_fin=None):
+        """Calcule l'évolution mensuelle du CA"""
+        try:
+            if not self._model_exists('account.move'):
+                return {'labels': [], 'data': []}
+            
+            # Déterminer la plage de dates
+            if not date_debut:
+                date_debut = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+            if not date_fin:
+                date_fin = datetime.now().strftime('%Y-%m-%d')
+            
+            date_debut = self._parse_date(date_debut)
+            date_fin = self._parse_date(date_fin)
+            
+            # Générer tous les mois dans l'intervalle
+            current = date_debut.replace(day=1)
+            end = date_fin.replace(day=1)
+            months = []
+            
+            while current <= end:
+                months.append(current.strftime('%Y-%m'))
+                # Passer au mois suivant
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+            
+            # Récupérer le CA pour chaque mois
+            ca_par_mois = []
+            for month in months:
+                start_date = datetime.strptime(month + '-01', '%Y-%m-%d')
+                if start_date.month == 12:
+                    end_date = start_date.replace(year=start_date.year + 1, month=1, day=1) - timedelta(days=1)
+                else:
+                    end_date = start_date.replace(month=start_date.month + 1, day=1) - timedelta(days=1)
+                
+                ca_mois = self.get_chiffre_affaires(
+                    start_date.strftime('%Y-%m-%d'),
+                    end_date.strftime('%Y-%m-%d')
+                )
+                ca_par_mois.append(ca_mois)
+            
+            # Formater les labels en français
+            mois_fr = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 
+                    'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+            
+            labels = []
+            for month in months:
+                year, month_num = month.split('-')
+                labels.append(f"{mois_fr[int(month_num)-1]} {year}")
+            
+            return {
+                'labels': labels,
+                'data': ca_par_mois
+            }
+            
+        except Exception as e:
+            _logger.error(f"Erreur calcul évolution mensuelle CA: {str(e)}")
+            return {'labels': [], 'data': []}
+
+    # Mettre à jour la méthode get_dashboard_data pour inclure les nouvelles données
+    @api.model
+    def get_dashboard_data(self, date_debut=None, date_fin=None):
+        """Méthode principale pour récupérer toutes les données du dashboard"""
+        try:
+            _logger.info(f"Récupération données dashboard: {date_debut} à {date_fin}")
+            
+            result = {
+                'chiffre_affaires': 0.0,
+                'projets': [],
+                'marge_administrative': {
+                    'ca_total': 0.0,
+                    'cout_admin': 0.0,
+                    'marge_admin': 0.0,
+                    'taux_marge_admin': 0.0
+                },
+                'budget_data': {
+                    'total_budget': 0.0,
+                    'budget_utilise': 0.0,
+                    'budget_restant': 0.0,
+                    'taux_utilisation': 0.0,
+                    'projets_budget': []
+                },
+                'graphique_data': {
+                    'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
+                    'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
+                    'graphique_evolution': {'labels': [], 'data': []}
+                }
+            }
+            
+            # Calcul séquentiel avec gestion d'erreur
+            try:
+                result['chiffre_affaires'] = float(self.get_chiffre_affaires(date_debut, date_fin))
+            except Exception as e:
+                _logger.error(f"Erreur CA: {str(e)}")
+            
+            try:
+                result['projets'] = self.get_projets_data(date_debut, date_fin)
+            except Exception as e:
+                _logger.error(f"Erreur projets: {str(e)}")
+            
+            try:
+                result['marge_administrative'] = self.get_marge_administrative(date_debut, date_fin)
+            except Exception as e:
+                _logger.error(f"Erreur marge admin: {str(e)}")
+            
+            try:
+                result['budget_data'] = self.get_budget_data(date_debut, date_fin)
+            except Exception as e:
+                _logger.error(f"Erreur données budget: {str(e)}")
+            
+            try:
+                result['graphique_data'] = self.get_graphique_data(date_debut, date_fin)
+            except Exception as e:
+                _logger.error(f"Erreur données graphiques: {str(e)}")
+            
+            return result
+            
+        except Exception as e:
+            _logger.error(f"Erreur critique dashboard: {str(e)}")
+            return {
+                'chiffre_affaires': 0.0,
+                'projets': [],
+                'marge_administrative': {
+                    'ca_total': 0.0,
+                    'cout_admin': 0.0,
+                    'marge_admin': 0.0,
+                    'taux_marge_admin': 0.0
+                },
+                'budget_data': {
+                    'total_budget': 0.0,
+                    'budget_utilise': 0.0,
+                    'budget_restant': 0.0,
+                    'taux_utilisation': 0.0,
+                    'projets_budget': []
+                },
+                'graphique_data': {
+                    'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
+                    'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
+                    'graphique_evolution': {'labels': [], 'data': []}
+                }
+            }

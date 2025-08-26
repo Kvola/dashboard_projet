@@ -25,14 +25,17 @@
     "data": [
         "security/ir.model.access.csv",
         "views/dashboard_views.xml",
+        #"views/assets.xml",
         #"views/menu.xml",
     ],
     "assets": {
         "web.assets_backend": [
-            #"dashboard_projet/static/src/css/dashboard.css",
+            "dashboard_projet/static/src/css/dashboard.css",
             "dashboard_projet/static/src/js/dashboard_service.js",
             "dashboard_projet/static/src/js/dashboard_component.js",
             "dashboard_projet/static/src/xml/dashboard.xml",
+            # Inclure Chart.js depuis CDN ou local
+            'https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js',
         ],
     },
     "installable": True,

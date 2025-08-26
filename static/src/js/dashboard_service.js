@@ -110,6 +110,118 @@ class DashboardProjetService {
         }
     }
 
+    // Ajouter ces méthodes à la classe DashboardProjetService
+
+    /**
+     * Récupère les données des graphiques
+     * @param {string} dateDebut - Date de début au format YYYY-MM-DD
+     * @param {string} dateFin - Date de fin au format YYYY-MM-DD
+     * @returns {Promise<Object>} Données des graphiques
+     */
+    async getGraphiqueData(dateDebut, dateFin) {
+        try {
+            const result = await jsonrpc('/dashboard_projet/graphique_data', {
+                date_debut: dateDebut,
+                date_fin: dateFin
+            });
+            
+            if (result && result.error) {
+                console.error('Erreur retournée par le serveur:', result.error);
+                return this._getDefaultGraphiqueData();
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('Erreur lors de la récupération des données graphiques:', error);
+            return this._getDefaultGraphiqueData();
+        }
+    }
+
+    /**
+     * Retourne des données de graphique par défaut
+     * @returns {Object} Structure de graphique par défaut
+     * @private
+     */
+    _getDefaultGraphiqueData() {
+        return {
+            graphique_ca: { labels: [], data: [], backgroundColors: [] },
+            graphique_statuts: { labels: [], data: [], backgroundColors: [] },
+            graphique_evolution: { labels: [], data: [] }
+        };
+    }
+
+    // Mettre à jour la méthode formatDashboardData pour inclure les nouvelles données
+    formatDashboardData(rawData) {
+        if (!rawData || typeof rawData !== 'object') {
+            return this._getDefaultDashboardData();
+        }
+
+        return {
+            chiffre_affaires: this._safeNumber(rawData.chiffre_affaires),
+            projets: Array.isArray(rawData.projets) ? rawData.projets.map(projet => ({
+                id: projet.id || 0,
+                name: projet.name || 'Projet sans nom',
+                ca: this._safeNumber(projet.ca),
+                nb_personnes: this._safeInteger(projet.nb_personnes),
+                heures: this._safeNumber(projet.heures),
+                stage: projet.stage || 'Non défini',
+                marge_data: null // Sera rempli séparément
+            })) : [],
+            marge_administrative: {
+                ca_total: this._safeNumber(rawData.marge_administrative?.ca_total),
+                cout_admin: this._safeNumber(rawData.marge_administrative?.cout_admin),
+                marge_admin: this._safeNumber(rawData.marge_administrative?.marge_admin),
+                taux_marge_admin: this._safeNumber(rawData.marge_administrative?.taux_marge_admin)
+            },
+            budget_data: {
+                total_budget: this._safeNumber(rawData.budget_data?.total_budget),
+                budget_utilise: this._safeNumber(rawData.budget_data?.budget_utilise),
+                budget_restant: this._safeNumber(rawData.budget_data?.budget_restant),
+                taux_utilisation: this._safeNumber(rawData.budget_data?.taux_utilisation),
+                projets_budget: Array.isArray(rawData.budget_data?.projets_budget) ? 
+                    rawData.budget_data.projets_budget.map(projet => ({
+                        id: projet.id || 0,
+                        name: projet.name || 'Projet sans nom',
+                        budget: this._safeNumber(projet.budget),
+                        ca_realise: this._safeNumber(projet.ca_realise),
+                        taux_utilisation: this._safeNumber(projet.taux_utilisation),
+                        budget_restant: this._safeNumber(projet.budget_restant)
+                    })) : []
+            },
+            graphique_data: {
+                graphique_ca: rawData.graphique_data?.graphique_ca || { labels: [], data: [], backgroundColors: [] },
+                graphique_statuts: rawData.graphique_data?.graphique_statuts || { labels: [], data: [], backgroundColors: [] },
+                graphique_evolution: rawData.graphique_data?.graphique_evolution || { labels: [], data: [] }
+            }
+        };
+    }
+
+    // Mettre à jour la méthode _getDefaultDashboardData
+    _getDefaultDashboardData() {
+        return {
+            chiffre_affaires: 0,
+            projets: [],
+            marge_administrative: {
+                ca_total: 0,
+                cout_admin: 0,
+                marge_admin: 0,
+                taux_marge_admin: 0
+            },
+            budget_data: {
+                total_budget: 0,
+                budget_utilise: 0,
+                budget_restant: 0,
+                taux_utilisation: 0,
+                projets_budget: []
+            },
+            graphique_data: {
+                graphique_ca: { labels: [], data: [], backgroundColors: [] },
+                graphique_statuts: { labels: [], data: [], backgroundColors: [] },
+                graphique_evolution: { labels: [], data: [] }
+            }
+        };
+    }
+
     /**
      * Déclenche un téléchargement via un lien temporaire
      * @param {string} url - URL du fichier à télécharger
@@ -210,36 +322,6 @@ class DashboardProjetService {
     }
 
     /**
-     * Méthode utilitaire pour formater les données reçues
-     * @param {Object} rawData - Données brutes du backend
-     * @returns {Object} Données formatées
-     */
-    formatDashboardData(rawData) {
-        if (!rawData || typeof rawData !== 'object') {
-            return this._getDefaultDashboardData();
-        }
-
-        return {
-            chiffre_affaires: this._safeNumber(rawData.chiffre_affaires),
-            projets: Array.isArray(rawData.projets) ? rawData.projets.map(projet => ({
-                id: projet.id || 0,
-                name: projet.name || 'Projet sans nom',
-                ca: this._safeNumber(projet.ca),
-                nb_personnes: this._safeInteger(projet.nb_personnes),
-                heures: this._safeNumber(projet.heures),
-                stage: projet.stage || 'Non défini',
-                marge_data: null // Sera rempli séparément
-            })) : [],
-            marge_administrative: {
-                ca_total: this._safeNumber(rawData.marge_administrative?.ca_total),
-                cout_admin: this._safeNumber(rawData.marge_administrative?.cout_admin),
-                marge_admin: this._safeNumber(rawData.marge_administrative?.marge_admin),
-                taux_marge_admin: this._safeNumber(rawData.marge_administrative?.taux_marge_admin)
-            }
-        };
-    }
-
-    /**
      * Valide et nettoie les données de marge
      * @param {Object} data - Données de marge brutes
      * @returns {Object} Données de marge validées
@@ -296,24 +378,6 @@ class DashboardProjetService {
     _safeInteger(value, defaultValue = 0) {
         const num = parseInt(value, 10);
         return isNaN(num) ? defaultValue : num;
-    }
-
-    /**
-     * Retourne des données de dashboard par défaut
-     * @returns {Object} Structure de données par défaut
-     * @private
-     */
-    _getDefaultDashboardData() {
-        return {
-            chiffre_affaires: 0,
-            projets: [],
-            marge_administrative: {
-                ca_total: 0,
-                cout_admin: 0,
-                marge_admin: 0,
-                taux_marge_admin: 0
-            }
-        };
     }
 
     /**

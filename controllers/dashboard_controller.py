@@ -587,19 +587,6 @@ class DashboardController(http.Controller):
         
         return response
     
-    def _default_dashboard_data(self):
-        """Données par défaut pour le dashboard"""
-        return {
-            'chiffre_affaires': 0.0,
-            'projets': [],
-            'marge_administrative': {
-                'ca_total': 0.0,
-                'cout_admin': 0.0,
-                'marge_admin': 0.0,
-                'taux_marge_admin': 0.0
-            }
-        }
-    
     def _default_marge_data(self):
         """Données par défaut pour la marge"""
         return {
@@ -609,6 +596,55 @@ class DashboardController(http.Controller):
             'taux_marge': 0.0
         }
     
+    def _ensure_valid_marge(self, data):
+        """S'assure que les données de marge sont valides"""
+        if not isinstance(data, dict):
+            return self._default_marge_data()
+        
+        return {
+            'revenus': float(data.get('revenus', 0) or 0),
+            'cout_salarial': float(data.get('cout_salarial', 0) or 0),
+            'marge': float(data.get('marge', 0) or 0),
+            'taux_marge': float(data.get('taux_marge', 0) or 0)
+        }
+    
+    def _json_serializer(self, obj):
+        """Sérialiseur JSON pour les objets non sérialisables"""
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+        elif hasattr(obj, '__str__'):
+            return str(obj)
+        return None
+
+    # Ajouter cette méthode à la classe DashboardController
+
+    @http.route('/dashboard_projet/graphique_data', type='json', auth='user', methods=['POST'], csrf=False)
+    def get_graphique_data(self, date_debut=None, date_fin=None):
+        """Endpoint pour récupérer les données des graphiques"""
+        try:
+            if not request.env.user:
+                return self._error_response('Utilisateur non authentifié')
+            
+            if 'dashboard.projet' not in request.env:
+                return {'error': 'Modèle dashboard non disponible'}
+            
+            date_debut = self._validate_date(date_debut)
+            date_fin = self._validate_date(date_fin)
+            
+            dashboard_model = request.env['dashboard.projet']
+            result = dashboard_model.get_graphique_data(date_debut, date_fin)
+            
+            return result
+            
+        except Exception as e:
+            _logger.error(f"Erreur récupération données graphiques: {str(e)}")
+            return {
+                'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
+                'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
+                'graphique_evolution': {'labels': [], 'data': []}
+            }
+
+    # Mettre à jour la méthode _ensure_valid_response pour inclure les nouvelles données
     def _ensure_valid_response(self, data):
         """S'assure que la réponse a une structure valide"""
         if not isinstance(data, dict):
@@ -636,24 +672,54 @@ class DashboardController(http.Controller):
             'taux_marge_admin': float(marge_admin.get('taux_marge_admin', 0) or 0)
         }
         
-        return data
-    
-    def _ensure_valid_marge(self, data):
-        """S'assure que les données de marge sont valides"""
-        if not isinstance(data, dict):
-            return self._default_marge_data()
+        # Données budget
+        budget_data = data.get('budget_data', {})
+        if not isinstance(budget_data, dict):
+            budget_data = {}
         
-        return {
-            'revenus': float(data.get('revenus', 0) or 0),
-            'cout_salarial': float(data.get('cout_salarial', 0) or 0),
-            'marge': float(data.get('marge', 0) or 0),
-            'taux_marge': float(data.get('taux_marge', 0) or 0)
+        data['budget_data'] = {
+            'total_budget': float(budget_data.get('total_budget', 0) or 0),
+            'budget_utilise': float(budget_data.get('budget_utilise', 0) or 0),
+            'budget_restant': float(budget_data.get('budget_restant', 0) or 0),
+            'taux_utilisation': float(budget_data.get('taux_utilisation', 0) or 0),
+            'projets_budget': budget_data.get('projets_budget', []) or []
         }
-    
-    def _json_serializer(self, obj):
-        """Sérialiseur JSON pour les objets non sérialisables"""
-        if hasattr(obj, 'isoformat'):
-            return obj.isoformat()
-        elif hasattr(obj, '__str__'):
-            return str(obj)
-        return None
+        
+        # Données graphiques
+        graphique_data = data.get('graphique_data', {})
+        if not isinstance(graphique_data, dict):
+            graphique_data = {}
+        
+        data['graphique_data'] = {
+            'graphique_ca': graphique_data.get('graphique_ca', {'labels': [], 'data': [], 'backgroundColors': []}),
+            'graphique_statuts': graphique_data.get('graphique_statuts', {'labels': [], 'data': [], 'backgroundColors': []}),
+            'graphique_evolution': graphique_data.get('graphique_evolution', {'labels': [], 'data': []})
+        }
+        
+        return data
+
+    # Mettre à jour la méthode _default_dashboard_data
+    def _default_dashboard_data(self):
+        """Données par défaut pour le dashboard"""
+        return {
+            'chiffre_affaires': 0.0,
+            'projets': [],
+            'marge_administrative': {
+                'ca_total': 0.0,
+                'cout_admin': 0.0,
+                'marge_admin': 0.0,
+                'taux_marge_admin': 0.0
+            },
+            'budget_data': {
+                'total_budget': 0.0,
+                'budget_utilise': 0.0,
+                'budget_restant': 0.0,
+                'taux_utilisation': 0.0,
+                'projets_budget': []
+            },
+            'graphique_data': {
+                'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
+                'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
+                'graphique_evolution': {'labels': [], 'data': []}
+            }
+        }

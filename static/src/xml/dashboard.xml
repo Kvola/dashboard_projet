@@ -3,7 +3,7 @@
     <t t-name="dashboard_projet.Dashboard">
         <!-- Container principal avec layout flexible optimisé -->
         <div class="dashboard-container">
-            
+
             <!-- Header fixe avec filtres et statut système -->
             <div class="dashboard-header">
                 <div class="dashboard-controls">
@@ -122,7 +122,7 @@
             <!-- Contenu principal scrollable -->
             <div class="dashboard-scroll-container">
                 <div class="dashboard-content" t-att-class="state.loading ? 'loading' : ''">
-                    
+
                     <!-- Métriques principales -->
                     <div class="dashboard-section metrics-section">
                         <div class="row g-3">
@@ -283,6 +283,160 @@
                         </div>
                     </div>
 
+                    <!-- Ajouter ces sections au template -->
+
+                    <!-- Section Budget après la section financière -->
+                    <div class="dashboard-section budget-section">
+                        <div class="row">
+                            <div class="col-lg-12">
+                                <div class="summary-card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0" style="color:#ffffff">
+                                            <i class="fa fa-money-bill-wave me-2"/>
+                                            Données Budgétaires
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <div class="summary-item">
+                                                    <div class="summary-label">Budget Total</div>
+                                                    <div class="summary-value text-info">
+                                                        <t t-esc="formatCurrency(state.dashboardData.budget_data?.total_budget || 0)"/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="summary-item">
+                                                    <div class="summary-label">Budget Utilisé</div>
+                                                    <div class="summary-value text-warning">
+                                                        <t t-esc="formatCurrency(state.dashboardData.budget_data?.budget_utilise || 0)"/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="summary-item">
+                                                    <div class="summary-label">Budget Restant</div>
+                                                    <div class="summary-value text-success">
+                                                        <t t-esc="formatCurrency(state.dashboardData.budget_data?.budget_restant || 0)"/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="summary-item">
+                                                    <div class="summary-label">Taux d'Utilisation</div>
+                                                    <div t-att-class="'summary-value ' + getBudgetUtilisationClass(state.dashboardData.budget_data?.taux_utilisation || 0)">
+                                                        <t t-esc="formatPercentage(state.dashboardData.budget_data?.taux_utilisation || 0)"/>
+                                                        <small class="d-block">
+                                                            <t t-esc="getBudgetUtilisationText(state.dashboardData.budget_data?.taux_utilisation || 0)"/>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Tableau des projets avec budget -->
+                                        <t t-if="state.dashboardData.budget_data?.projets_budget?.length">
+                                            <div class="mt-4">
+                                                <h6 class="mb-3">Détail par Projet</h6>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-hover">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Projet</th>
+                                                                <th class="text-end">Budget</th>
+                                                                <th class="text-end">CA Réalisé</th>
+                                                                <th class="text-end">Budget Restant</th>
+                                                                <th class="text-end">Utilisation</th>
+                                                                <th class="text-center">État</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <!-- Par cette version corrigée avec t-key : -->
+                                                            <t t-foreach="state.dashboardData.budget_data.projets_budget" t-as="projet" t-key="projet.id">
+                                                                <tr>
+                                                                    <td>
+                                                                        <a t-att-href="'/web#id=' + projet.id + '&amp;model=project.project&amp;view_type=form'"
+                                                                        target="_blank">
+                                                                            <t t-esc="projet.name"/>
+                                                                        </a>
+                                                                    </td>
+                                                                    <td class="text-end">
+                                                                        <t t-esc="formatCurrency(projet.budget)"/>
+                                                                    </td>
+                                                                    <td class="text-end">
+                                                                        <t t-esc="formatCurrency(projet.ca_realise)"/>
+                                                                    </td>
+                                                                    <td class="text-end">
+                                                                        <t t-esc="formatCurrency(projet.budget_restant)"/>
+                                                                    </td>
+                                                                    <td class="text-end">
+                                                                        <t t-esc="formatPercentage(projet.taux_utilisation)"/>
+                                                                    </td>
+                                                                    <td class="text-center">
+                                                                        <span t-att-class="'badge ' + getBudgetUtilisationClass(projet.taux_utilisation)">
+                                                                            <t t-esc="getBudgetUtilisationText(projet.taux_utilisation)"/>
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            </t>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </t>
+                                        <t t-else="">
+                                            <div class="alert alert-info mt-3 mb-0">
+                                                <i class="fa fa-info-circle me-2"/>
+                                                Aucun projet avec budget défini dans la période sélectionnée.
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section Graphiques après la section budget -->
+                    <div class="dashboard-section graphiques-section">
+                        <div class="row">
+                            <div class="col-lg-12">
+                                <div class="summary-card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0" style="color:#ffffff">
+                                            <i class="fa fa-chart-bar me-2"/>
+                                            Graphiques
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <!-- Graphique CA par projet -->
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="chart-container">
+                                                    <canvas id="graphique-ca" height="300"/>
+                                                </div>
+                                            </div>
+
+                                            <!-- Graphique répartition statuts -->
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="chart-container">
+                                                    <canvas id="graphique-statuts" height="300"/>
+                                                </div>
+                                            </div>
+
+                                            <!-- Graphique évolution mensuelle -->
+                                            <div class="col-lg-12">
+                                                <div class="chart-container">
+                                                    <canvas id="graphique-evolution" height="250"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Tableau des projets avec scroll interne -->
                     <div class="dashboard-section projects-section">
                         <div class="projects-table-container">
@@ -365,14 +519,14 @@
                                                                     </small>
                                                                 </div>
                                                             </td>
-                                                            
+
                                                             <!-- CA -->
                                                             <td class="text-end">
                                                                 <span class="amount-value">
                                                                     <t t-esc="formatCurrency(projet.ca)"/>
                                                                 </span>
                                                             </td>
-                                                            
+
                                                             <!-- Personnel -->
                                                             <td class="text-center">
                                                                 <span class="badge rounded-pill bg-info text-dark">
@@ -380,14 +534,14 @@
                                                                     <t t-esc="projet.nb_personnes"/>
                                                                 </span>
                                                             </td>
-                                                            
+
                                                             <!-- Heures -->
                                                             <td class="text-end">
                                                                 <span class="hours-value">
                                                                     <t t-esc="formatNumber(projet.heures, 1)"/>h
                                                                 </span>
                                                             </td>
-                                                            
+
                                                             <!-- Marge -->
                                                             <td class="text-center">
                                                                 <t t-set="marge" t-value="getMargeProjet(projet)"/>
@@ -403,14 +557,14 @@
                                                                     </span>
                                                                 </t>
                                                             </td>
-                                                            
+
                                                             <!-- Statut -->
                                                             <td class="text-center">
                                                                 <span class="badge bg-outline-secondary rounded-pill">
                                                                     <t t-esc="projet.stage"/>
                                                                 </span>
                                                             </td>
-                                                            
+
                                                             <!-- Actions -->
                                                             <td class="text-center">
                                                                 <button class="btn btn-sm btn-outline-primary" 
@@ -422,7 +576,7 @@
                                                         </tr>
                                                     </t>
                                                 </tbody>
-                                                
+
                                                 <!-- Footer du tableau avec totaux -->
                                                 <tfoot class="table-light sticky-footer">
                                                     <tr>
@@ -461,7 +615,7 @@
 
                 </div>
             </div>
-            
+
             <!-- Footer fixe -->
             <div class="dashboard-footer">
                 <div class="footer-content">
@@ -482,7 +636,40 @@
                 </div>
             </div>
         </div>
-        
+
+        <!-- Ajouter du CSS pour les graphiques -->
+        <style>
+            .chart-container {
+                position: relative;
+                height: 300px;
+                min-height: 250px;
+            }
+                        
+            .budget-section .summary-item {
+                text-align: center;
+                padding: 15px;
+                border-radius: 8px;
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+            }
+                        
+            .budget-section .summary-label {
+                font-size: 0.85rem;
+                color: #6c757d;
+                margin-bottom: 5px;
+            }
+                        
+            .budget-section .summary-value {
+                font-size: 1.4rem;
+                font-weight: 600;
+            }
+                        
+            .table-responsive {
+                max-height: 400px;
+                overflow-y: auto;
+            }
+        </style>
+
         <!-- Styles CSS optimisés pour le scroll -->
         <style>
             /* ===== RESET ET BASE ===== */
