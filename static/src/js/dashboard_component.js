@@ -4,6 +4,7 @@ import { Component, useState, onWillStart, onMounted, useRef } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { jsonrpc } from "@web/core/network/rpc_service";
+import { download } from "@web/core/network/download";
 
 class DashboardProjet extends Component {
     static template = "dashboard_projet.Dashboard";
@@ -15,10 +16,16 @@ class DashboardProjet extends Component {
         // État réactif avec OWL
         this.state = useState({
             loading: true,
-            dateDebut: this.getCurrentDate(-360),
+            dateDebut: this.getCurrentDate(-30),
             dateFin: this.getCurrentDate(0),
             dashboardData: this._getEmptyDashboardData(),
             showExportModal: false,
+            chartData: {
+                caEvolution: [],
+                margeEvolution: [],
+                projetsByStage: [],
+                budgetComparison: []
+            },
             systemStatus: {
                 healthy: false,
                 lastCheck: null,
@@ -28,8 +35,10 @@ class DashboardProjet extends Component {
             loadingStates: {
                 dashboard: false,
                 margins: false,
-                export: false
-            }
+                export: false,
+                charts: false
+            },
+            scrollPosition: 0
         });
 
         // Références et timeouts
@@ -37,6 +46,7 @@ class DashboardProjet extends Component {
         this.healthCheckInterval = null;
         this.retryCount = 0;
         this.maxRetries = 3;
+        this.scrollContainerRef = useRef("scrollContainer");
 
         // Hooks de cycle de vie
         onWillStart(async () => {
@@ -46,6 +56,7 @@ class DashboardProjet extends Component {
         onMounted(() => {
             console.log("Dashboard OWL monté avec succès");
             this._setupHealthMonitoring();
+            this._setupScrollHandler();
         });
     }
 
@@ -58,7 +69,8 @@ class DashboardProjet extends Component {
             { name: 'orm', required: false },
             { name: 'notification', required: false },
             { name: 'action', required: false },
-            { name: 'dashboard_projet', required: false }
+            { name: 'dashboard_projet', required: false },
+            { name: 'download', required: false }
         ];
 
         serviceList.forEach(({ name, required }) => {
@@ -77,6 +89,14 @@ class DashboardProjet extends Component {
         return services;
     }
 
+    _setupScrollHandler() {
+        if (this.scrollContainerRef.el) {
+            this.scrollContainerRef.el.addEventListener('scroll', (e) => {
+                this.state.scrollPosition = e.target.scrollTop;
+            });
+        }
+    }
+
     async _performStartupSequence() {
         try {
             console.log("🚀 Début séquence de démarrage dashboard");
@@ -87,6 +107,7 @@ class DashboardProjet extends Component {
             // 2. Chargement des données
             if (this.state.systemStatus.healthy) {
                 await this.loadDashboardData();
+                await this.loadChartData();
             } else {
                 console.warn("⚠️ Système non sain, chargement des données par défaut");
                 this.state.loading = false;
@@ -149,219 +170,6 @@ class DashboardProjet extends Component {
         return date.toISOString().split('T')[0];
     }
 
-    // Ajouter ces méthodes à la classe DashboardProjet
-
-    // ===== GRAPHIQUES =====
-
-    /**
-     * Initialise les graphiques avec Chart.js
-     */
-    _initGraphiques() {
-        if (typeof Chart === 'undefined') {
-            console.warn('Chart.js non disponible, les graphiques seront désactivés');
-            return;
-        }
-
-        this._destroyGraphiques(); // Nettoyer les anciens graphiques
-
-        // Graphique à barres - CA par projet
-        this._initGraphiqueCA();
-
-        // Graphique circulaire - Répartition des statuts
-        this._initGraphiqueStatuts();
-
-        // Graphique linéaire - Évolution mensuelle du CA
-        this._initGraphiqueEvolution();
-    }
-
-    /**
-     * Initialise le graphique à barres pour le CA par projet
-     */
-    _initGraphiqueCA() {
-        const ctx = document.getElementById('graphique-ca');
-        if (!ctx) return;
-
-        const data = this.state.dashboardData.graphique_data?.graphique_ca || {};
-        
-        this.graphiqueCA = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: data.labels || [],
-                datasets: [{
-                    label: 'Chiffre d\'affaires par projet (€)',
-                    data: data.data || [],
-                    backgroundColor: data.backgroundColors || '#007bff',
-                    borderColor: 'rgba(0, 123, 255, 0.8)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'CA par Projet',
-                        font: { size: 16, weight: 'bold' }
-                    },
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                return `CA: ${this.formatCurrency(context.raw)}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: (value) => {
-                                if (value >= 1000) {
-                                    return '€' + (value / 1000).toFixed(1) + 'k';
-                                }
-                                return '€' + value;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Initialise le graphique circulaire pour la répartition des statuts
-     */
-    _initGraphiqueStatuts() {
-        const ctx = document.getElementById('graphique-statuts');
-        if (!ctx) return;
-
-        const data = this.state.dashboardData.graphique_data?.graphique_statuts || {};
-        
-        this.graphiqueStatuts = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: data.labels || [],
-                datasets: [{
-                    data: data.data || [],
-                    backgroundColor: data.backgroundColors || ['#007bff', '#28a745', '#ffc107'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Répartition par Statut',
-                        font: { size: 16, weight: 'bold' }
-                    },
-                    legend: {
-                        position: 'right',
-                        labels: {
-                            boxWidth: 15,
-                            padding: 15
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = Math.round((context.raw / total) * 100);
-                                return `${context.label}: ${context.raw} projet(s) (${percentage}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Initialise le graphique linéaire pour l'évolution mensuelle du CA
-     */
-    _initGraphiqueEvolution() {
-        const ctx = document.getElementById('graphique-evolution');
-        if (!ctx) return;
-
-        const data = this.state.dashboardData.graphique_data?.graphique_evolution || {};
-        
-        this.graphiqueEvolution = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.labels || [],
-                datasets: [{
-                    label: 'Évolution du CA (€)',
-                    data: data.data || [],
-                    fill: true,
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                    borderColor: '#007bff',
-                    borderWidth: 2,
-                    pointBackgroundColor: '#007bff',
-                    pointBorderColor: '#ffffff',
-                    pointBorderWidth: 2,
-                    pointRadius: 4,
-                    tension: 0.3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Évolution Mensuelle du CA',
-                        font: { size: 16, weight: 'bold' }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                return `CA: ${this.formatCurrency(context.raw)}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: (value) => {
-                                if (value >= 1000) {
-                                    return '€' + (value / 1000).toFixed(1) + 'k';
-                                }
-                                return '€' + value;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    /**
-     * Détruit tous les graphiques existants
-     */
-    _destroyGraphiques() {
-        if (this.graphiqueCA) {
-            this.graphiqueCA.destroy();
-            this.graphiqueCA = null;
-        }
-        if (this.graphiqueStatuts) {
-            this.graphiqueStatuts.destroy();
-            this.graphiqueStatuts = null;
-        }
-        if (this.graphiqueEvolution) {
-            this.graphiqueEvolution.destroy();
-            this.graphiqueEvolution = null;
-        }
-    }
-
-    // Mettre à jour la méthode loadDashboardData pour initialiser les graphiques
     async loadDashboardData() {
         if (this.state.loadingStates.dashboard) {
             console.log("⏳ Chargement déjà en cours, ignoré");
@@ -392,10 +200,8 @@ class DashboardProjet extends Component {
             // Load project margins separately
             if (this.state.dashboardData.projets.length > 0) {
                 await this._loadProjectMargins();
+                await this._loadProjectBudgets();
             }
-
-            // Initialiser les graphiques après le chargement des données
-            this._initGraphiques();
 
             this.retryCount = 0; // Reset retry count on success
             this._showNotification("Données chargées avec succès", { type: "success" });
@@ -409,113 +215,6 @@ class DashboardProjet extends Component {
             this.state.loading = false;
             this.state.loadingStates.dashboard = false;
         }
-    }
-
-    // Mettre à jour la méthode _validateAndNormalizeDashboardData
-    _validateAndNormalizeDashboardData(data) {
-        const normalized = this._getEmptyDashboardData();
-
-        if (data && typeof data === 'object') {
-            normalized.chiffre_affaires = this._safeNumber(data.chiffre_affaires);
-            
-            if (Array.isArray(data.projets)) {
-                normalized.projets = data.projets.map(this._validateProjectData.bind(this));
-            }
-            
-            if (data.marge_administrative && typeof data.marge_administrative === 'object') {
-                const ma = data.marge_administrative;
-                normalized.marge_administrative = {
-                    ca_total: this._safeNumber(ma.ca_total),
-                    cout_admin: this._safeNumber(ma.cout_admin),
-                    marge_admin: this._safeNumber(ma.marge_admin),
-                    taux_marge_admin: this._safeNumber(ma.taux_marge_admin)
-                };
-            }
-            
-            // Données budget
-            if (data.budget_data && typeof data.budget_data === 'object') {
-                const bd = data.budget_data;
-                normalized.budget_data = {
-                    total_budget: this._safeNumber(bd.total_budget),
-                    budget_utilise: this._safeNumber(bd.budget_utilise),
-                    budget_restant: this._safeNumber(bd.budget_restant),
-                    taux_utilisation: this._safeNumber(bd.taux_utilisation),
-                    projets_budget: Array.isArray(bd.projets_budget) ? 
-                        bd.projets_budget.map(projet => ({
-                            id: projet.id || 0,
-                            name: projet.name || 'Projet sans nom',
-                            budget: this._safeNumber(projet.budget),
-                            ca_realise: this._safeNumber(projet.ca_realise),
-                            taux_utilisation: this._safeNumber(projet.taux_utilisation),
-                            budget_restant: this._safeNumber(projet.budget_restant)
-                        })) : []
-                };
-            }
-            
-            // Données graphiques
-            if (data.graphique_data && typeof data.graphique_data === 'object') {
-                const gd = data.graphique_data;
-                normalized.graphique_data = {
-                    graphique_ca: gd.graphique_ca || { labels: [], data: [], backgroundColors: [] },
-                    graphique_statuts: gd.graphique_statuts || { labels: [], data: [], backgroundColors: [] },
-                    graphique_evolution: gd.graphique_evolution || { labels: [], data: [] }
-                };
-            }
-        }
-
-        return normalized;
-    }
-
-    // Mettre à jour la méthode _getEmptyDashboardData
-    _getEmptyDashboardData() {
-        return {
-            chiffre_affaires: 0,
-            projets: [],
-            marge_administrative: {
-                ca_total: 0,
-                cout_admin: 0,
-                marge_admin: 0,
-                taux_marge_admin: 0
-            },
-            budget_data: {
-                total_budget: 0,
-                budget_utilise: 0,
-                budget_restant: 0,
-                taux_utilisation: 0,
-                projets_budget: []
-            },
-            graphique_data: {
-                graphique_ca: { labels: [], data: [], backgroundColors: [] },
-                graphique_statuts: { labels: [], data: [], backgroundColors: [] },
-                graphique_evolution: { labels: [], data: [] }
-            }
-        };
-    }
-
-    // Ajouter la méthode willDestroy pour nettoyer les graphiques
-    willDestroy() {
-        if (this.dateChangeTimeout) {
-            clearTimeout(this.dateChangeTimeout);
-        }
-        if (this.healthCheckInterval) {
-            clearInterval(this.healthCheckInterval);
-        }
-        
-        // Détruire les graphiques
-        this._destroyGraphiques();
-    }
-
-    // Ajouter des helpers pour les données budget
-    getBudgetUtilisationClass(taux) {
-        if (taux <= 70) return "bg-success";
-        if (taux <= 90) return "bg-warning text-dark";
-        return "bg-danger";
-    }
-
-    getBudgetUtilisationText(taux) {
-        if (taux <= 70) return "Sous contrôle";
-        if (taux <= 90) return "Attention";
-        return "Dépassement";
     }
 
     async _loadDataWithFallback() {
@@ -547,15 +246,9 @@ class DashboardProjet extends Component {
             console.log(`📈 Chargement marges pour ${this.state.dashboardData.projets.length} projets`);
             this.state.loadingStates.margins = true;
 
-            // Créer une copie des projets pour éviter les mutations directes
-            const projetsWithMargins = [...(this.state.dashboardData.projets || [])];
-            
-            const marginPromises = projetsWithMargins.map(async (projet, index) => {
+            const marginPromises = this.state.dashboardData.projets.map(async (projet) => {
                 try {
                     let margeData;
-
-                    // Ajouter un délai minimal pour éviter de surcharger le serveur
-                    await new Promise(resolve => setTimeout(resolve, index * 100));
 
                     if (this.services.dashboard_projet) {
                         margeData = await this.services.dashboard_projet.getProjetMarge(
@@ -570,18 +263,11 @@ class DashboardProjet extends Component {
                         });
                     }
 
-                    // Validation approfondie des données de marge
-                    if (margeData && typeof margeData === 'object' && !margeData.error) {
-                        projet.marge_data = this._validateMargeData(margeData);
-                        
-                        // Vérification de cohérence
-                        if (projet.marge_data.taux_marge > 100 || projet.marge_data.taux_marge < -100) {
-                            console.warn(`⚠️ Taux de marge anormal pour projet ${projet.id}: ${projet.marge_data.taux_marge}`);
-                            projet.marge_data.taux_marge = Math.max(Math.min(projet.marge_data.taux_marge, 100), -100);
-                        }
-                    } else {
-                        console.warn(`⚠️ Données de marge invalides pour projet ${projet.id}:`, margeData);
+                    if (margeData.error) {
+                        console.warn(`⚠️ Erreur marge projet ${projet.id}:`, margeData.error);
                         projet.marge_data = this._getEmptyMargeData();
+                    } else {
+                        projet.marge_data = this._validateMargeData(margeData);
                     }
 
                     return projet;
@@ -593,24 +279,119 @@ class DashboardProjet extends Component {
                 }
             });
 
-            // Traitement par lots pour éviter la surcharge
-            const batchSize = 3;
-            for (let i = 0; i < marginPromises.length; i += batchSize) {
-                const batch = marginPromises.slice(i, i + batchSize);
-                await Promise.allSettled(batch);
-                
-                // Mettre à jour l'état progressivement
-                this.state.dashboardData.projets = [...projetsWithMargins];
-            }
+            // Attendre toutes les promesses avec limitation de concurrence
+            await this._processConcurrent(marginPromises, 5);
             
-            console.log("✅ Marges projets chargées avec succès");
+            console.log("✅ Marges projets chargées");
 
         } catch (error) {
             console.error("❌ Erreur chargement marges:", error);
-            this._showNotification("Erreur lors du calcul des marges projet", { type: "warning" });
         } finally {
             this.state.loadingStates.margins = false;
         }
+    }
+
+    async _loadProjectBudgets() {
+        try {
+            // Chargement des données budgétaires
+            const budgetData = await jsonrpc('/dashboard_projet/budget_data', {
+                date_debut: this.state.dateDebut,
+                date_fin: this.state.dateFin
+            });
+
+            if (budgetData && !budgetData.error) {
+                this.state.dashboardData.budget_comparison = budgetData;
+            }
+        } catch (error) {
+            console.warn("⚠️ Erreur chargement budget:", error);
+        }
+    }
+
+    async loadChartData() {
+        if (this.state.loadingStates.charts) return;
+
+        try {
+            this.state.loadingStates.charts = true;
+            console.log("📊 Chargement données graphiques");
+
+            // Données pour graphiques
+            const chartDataPromises = [
+                this._loadCaEvolution(),
+                this._loadMargeEvolution(),
+                this._loadProjetsByStage(),
+                this._loadBudgetComparison()
+            ];
+
+            const [caEvolution, margeEvolution, projetsByStage, budgetComparison] = 
+                await Promise.allSettled(chartDataPromises);
+
+            this.state.chartData = {
+                caEvolution: caEvolution.status === 'fulfilled' ? caEvolution.value : [],
+                margeEvolution: margeEvolution.status === 'fulfilled' ? margeEvolution.value : [],
+                projetsByStage: projetsByStage.status === 'fulfilled' ? projetsByStage.value : [],
+                budgetComparison: budgetComparison.status === 'fulfilled' ? budgetComparison.value : []
+            };
+
+            console.log("✅ Données graphiques chargées");
+
+        } catch (error) {
+            console.error("❌ Erreur chargement graphiques:", error);
+        } finally {
+            this.state.loadingStates.charts = false;
+        }
+    }
+
+    async _loadCaEvolution() {
+        // Simuler données évolution CA (remplacer par vraie API)
+        const data = [];
+        const currentDate = new Date(this.state.dateDebut);
+        const endDate = new Date(this.state.dateFin);
+        
+        while (currentDate <= endDate) {
+            const monthCA = Math.random() * 100000 + 50000;
+            data.push({
+                date: currentDate.toISOString().slice(0, 7),
+                ca: monthCA,
+                ca_prevu: monthCA * (0.9 + Math.random() * 0.2)
+            });
+            currentDate.setMonth(currentDate.getMonth() + 1);
+        }
+        
+        return data;
+    }
+
+    async _loadMargeEvolution() {
+        // Simuler données évolution marge
+        return this.state.dashboardData.projets.map(projet => ({
+            projet_name: projet.name,
+            marge: projet.marge_data ? projet.marge_data.taux_marge : 0,
+            ca: projet.ca
+        }));
+    }
+
+    async _loadProjetsByStage() {
+        // Grouper projets par statut
+        const stages = {};
+        this.state.dashboardData.projets.forEach(projet => {
+            const stage = projet.stage || 'Non défini';
+            stages[stage] = (stages[stage] || 0) + 1;
+        });
+
+        return Object.entries(stages).map(([stage, count]) => ({
+            stage,
+            count,
+            percentage: (count / this.state.dashboardData.projets.length) * 100
+        }));
+    }
+
+    async _loadBudgetComparison() {
+        // Comparaison budget vs réalisé
+        return this.state.dashboardData.projets.map(projet => ({
+            projet_name: projet.name,
+            budget_prevu: projet.budget_prevu || projet.ca * 1.2,
+            ca_realise: projet.ca,
+            ecart: ((projet.ca / (projet.budget_prevu || projet.ca * 1.2)) - 1) * 100
+        }));
     }
 
     async _processConcurrent(promises, limit = 5) {
@@ -623,56 +404,6 @@ class DashboardProjet extends Component {
         return results;
     }
 
-    // ===== DATA VALIDATION =====
-
-    _validateProjectData(projet) {
-        return {
-            id: projet.id || 0,
-            name: projet.name || `Projet ${projet.id || 'Unknown'}`,
-            ca: this._safeNumber(projet.ca),
-            nb_personnes: this._safeNumber(projet.nb_personnes, 0, true),
-            heures: this._safeNumber(projet.heures),
-            stage: projet.stage || 'Non défini',
-            marge_data: null
-        };
-    }
-
-    _validateMargeData(data) {
-        if (!data || typeof data !== 'object') {
-            return this._getEmptyMargeData();
-        }
-
-        const revenus = this._safeNumber(data.revenus);
-        const cout_salarial = this._safeNumber(data.cout_salarial);
-        const marge = this._safeNumber(data.marge);
-        
-        // Calcul du taux de marge si non fourni ou incohérent
-        let taux_marge = this._safeNumber(data.taux_marge);
-        
-        if ((taux_marge === 0 || isNaN(taux_marge)) && revenus > 0) {
-            // Recalculer le taux si nécessaire
-            taux_marge = ((revenus - cout_salarial) / revenus) * 100;
-        }
-
-        // Validation de la cohérence
-        if (Math.abs(marge - (revenus - cout_salarial)) > 1) {
-            console.warn("Incohérence dans les données de marge, recalcul...");
-            marge = revenus - cout_salarial;
-        }
-
-        return {
-            revenus: revenus,
-            cout_salarial: cout_salarial,
-            marge: marge,
-            taux_marge: Math.round(taux_marge * 10) / 10 // Arrondir à 1 décimale
-        };
-    }
-
-    _safeNumber(value, defaultValue = 0, isInteger = false) {
-        const num = parseFloat(value) || defaultValue;
-        return isInteger ? Math.floor(num) : num;
-    }
-
     // ===== EVENT HANDLERS =====
     
     async onDateChange() {
@@ -680,7 +411,7 @@ class DashboardProjet extends Component {
         this.dateChangeTimeout = setTimeout(async () => {
             console.log("📅 Changement de dates détecté");
             await this.refreshDashboard();
-        }, 800); // Debounce increased to 800ms
+        }, 800);
     }
 
     async refreshDashboard() {
@@ -689,6 +420,7 @@ class DashboardProjet extends Component {
             
             if (this.state.systemStatus.healthy) {
                 await this.loadDashboardData();
+                await this.loadChartData();
             } else {
                 this._showNotification("Système indisponible, impossible d'actualiser", { type: "warning" });
             }
@@ -697,53 +429,58 @@ class DashboardProjet extends Component {
         }
     }
 
+    scrollToTop() {
+        if (this.scrollContainerRef.el) {
+            this.scrollContainerRef.el.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
     // ===== EXPORT FUNCTIONALITY =====
     
-    async exportDashboard(format = 'xlsx') {
-        if (this.state.loadingStates.export) {
-            console.log("Export déjà en cours...");
-            return;
-        }
+    async exportDashboard(format = 'json') {
+        if (this.state.loadingStates.export) return;
 
         try {
-            console.log(`🔤 Export dashboard format: ${format}`);
+            console.log(`📤 Export dashboard format: ${format}`);
             this.state.loadingStates.export = true;
 
-            // Validation du format
-            const supportedFormats = ['xlsx', 'pdf', 'json', 'csv'];
-            if (!supportedFormats.includes(format.toLowerCase())) {
-                throw new Error(`Format non supporté: ${format}`);
-            }
+            const params = {
+                date_debut: this.state.dateDebut || '',
+                date_fin: this.state.dateFin || '',
+                format: format,
+                include_charts: true,
+                include_budget: true
+            };
 
-            // Validation des dates
-            if (!this.state.dateDebut || !this.state.dateFin) {
-                throw new Error('Les dates de début et fin sont requises pour l\'export');
-            }
-
-            // Tentative via le service d'abord
-            if (this.services.dashboard_projet) {
-                try {
-                    console.log("📤 Export via service dashboard");
-                    await this.services.dashboard_projet.exportDashboard(
-                        this.state.dateDebut,
-                        this.state.dateFin,
-                        format
-                    );
-                    
-                    this._showNotification(`Export ${format.toUpperCase()} lancé avec succès`, { type: "success" });
-                    console.log("✅ Export via service réussi");
-                    return;
-                    
-                } catch (serviceError) {
-                    console.warn("⚠️ Service export échoué, tentative fallback:", serviceError);
+            if (['excel', 'xlsx'].includes(format.toLowerCase())) {
+                await this._exportExcel(params);
+            } else if (format.toLowerCase() === 'pdf') {
+                await this._exportPDF(params);
+            } else {
+                // JSON et CSV via endpoint existant
+                if (this.services.download) {
+                    await this.services.download({
+                        url: '/dashboard_projet/export',
+                        data: params,
+                        complete: () => {
+                            this._showNotification(`Export ${format.toUpperCase()} terminé`, { type: "success" });
+                        },
+                        error: (error) => {
+                            this._showNotification(`Erreur export: ${error.message}`, { type: "danger" });
+                        }
+                    });
+                } else {
+                    // Fallback
+                    const urlParams = new URLSearchParams(params);
+                    const url = `/dashboard_projet/export?${urlParams.toString()}`;
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `dashboard_${this.state.dateDebut}_${this.state.dateFin}.${format}`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
                 }
             }
-
-            // Fallback : téléchargement direct via URL
-            console.log("📂 Export via téléchargement direct");
-            await this._exportViaDirect(format);
-            
-            this._showNotification(`Export ${format.toUpperCase()} lancé`, { type: "info" });
 
         } catch (error) {
             console.error("❌ Erreur export:", error);
@@ -753,483 +490,119 @@ class DashboardProjet extends Component {
         }
     }
 
-    // Nouvelle méthode helper pour l'export direct
-    async _exportViaDirect(format) {
+    async _exportExcel(params) {
         try {
-            // Construction des paramètres URL
-            const params = new URLSearchParams({
-                date_debut: this.state.dateDebut || '',
-                date_fin: this.state.dateFin || '',
-                format: format.toLowerCase()
-            });
-
-            const url = `/dashboard_projet/export?${params.toString()}`;
-            
-            // Différentes stratégies selon le format
-            if (format.toLowerCase() === 'json') {
-                // Pour JSON, ouvrir dans nouvel onglet
-                const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
-                if (!newWindow) {
-                    throw new Error('Popup bloqué. Veuillez autoriser les popups pour ce site.');
-                }
-            } else {
-                // Pour Excel/PDF/CSV, téléchargement via lien temporaire
-                await this._triggerFileDownload(url, `dashboard_${this.state.dateDebut}_${this.state.dateFin}.${format.toLowerCase()}`);
-            }
-            
-        } catch (error) {
-            console.error("❌ Erreur export direct:", error);
-            throw error;
-        }
-    }
-
-    // Méthode helper pour déclencher un téléchargement
-    async _triggerFileDownload(url, suggestedFilename) {
-        return new Promise((resolve, reject) => {
-            try {
-                // Créer un lien de téléchargement invisible
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = suggestedFilename;
-                link.style.display = 'none';
-                link.target = '_self';
-                
-                // Gérer les événements de téléchargement
-                const cleanup = () => {
-                    document.body.removeChild(link);
-                };
-                
-                link.addEventListener('click', () => {
-                    console.log(`📥 Téléchargement initié: ${suggestedFilename}`);
-                    // Nettoyer après un délai pour laisser le temps au téléchargement
-                    setTimeout(() => {
-                        cleanup();
-                        resolve();
-                    }, 1000);
-                });
-                
-                // Ajouter au DOM et déclencher le clic
-                document.body.appendChild(link);
-                link.click();
-                
-            } catch (error) {
-                console.error("❌ Erreur déclenchement téléchargement:", error);
-                
-                // Fallback : ouvrir dans une nouvelle fenêtre
-                try {
-                    const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
-                    if (newWindow) {
-                        resolve();
-                    } else {
-                        reject(new Error('Impossible d\'ouvrir le téléchargement'));
-                    }
-                } catch (fallbackError) {
-                    reject(fallbackError);
-                }
-            }
-        });
-    }
-
-    // Méthodes utilitaires pour les exports spécifiques
-    async exportToExcel() {
-        return await this.exportDashboard('xlsx');
-    }
-
-    async exportToPDF() {
-        return await this.exportDashboard('pdf');
-    }
-
-    async exportToJSON() {
-        return await this.exportDashboard('json');
-    }
-
-    async exportToCSV() {
-        return await this.exportDashboard('csv');
-    }
-
-    // Méthode pour tester les exports
-    async testExports() {
-        const formats = ['xlsx', 'pdf', 'json', 'csv'];
-        const results = {};
-        
-        this._showNotification("Test des exports en cours...", { type: "info" });
-        
-        for (const format of formats) {
-            try {
-                console.log(`🧪 Test export ${format}`);
-                // Ne pas vraiment télécharger, juste tester l'URL
-                const params = new URLSearchParams({
-                    date_debut: this.state.dateDebut || '',
-                    date_fin: this.state.dateFin || '',
-                    format: format
-                });
-                
-                const url = `/dashboard_projet/export?${params.toString()}`;
-                
-                // Test avec fetch (ne télécharge pas le fichier)
-                const response = await fetch(url, { 
-                    method: 'HEAD',  // HEAD pour éviter de télécharger
-                    credentials: 'same-origin'
-                });
-                
-                results[format] = {
-                    success: response.ok,
-                    status: response.status,
-                    contentType: response.headers.get('content-type')
-                };
-                
-            } catch (error) {
-                results[format] = {
-                    success: false,
-                    error: error.message
-                };
-            }
-        }
-        
-        console.log("🧪 Résultats test exports:", results);
-        
-        const successCount = Object.values(results).filter(r => r.success).length;
-        this._showNotification(
-            `Test terminé: ${successCount}/${formats.length} formats fonctionnels`, 
-            { type: successCount === formats.length ? "success" : "warning" }
-        );
-        
-        return results;
-    }
-
-    // ===== PROJECT DETAIL - VERSION CORRIGÉE =====
-
-    /**
-     * Ouvre le détail d'un projet avec gestion d'erreur robuste et fallbacks
-     * @param {number|string} projectId - ID du projet à ouvrir
-     * @param {Object} options - Options d'ouverture (target, view_type, etc.)
-     */
-    async openProjectDetail(projectId, options = {}) {
-        // Validation des paramètres
-        if (!this._validateProjectId(projectId)) {
-            this._showNotification("ID de projet invalide", { type: "warning" });
-            return false;
-        }
-
-        // Configuration par défaut
-        const defaultOptions = {
-            target: 'new',
-            view_type: 'form',
-            context: {},
-            fallback_enabled: true,
-            loading_message: true
-        };
-
-        const config = { ...defaultOptions, ...options };
-        const numericProjectId = parseInt(projectId, 10);
-
-        try {
-            console.log(`🔍 Ouverture projet ID: ${numericProjectId}`);
-
-            // Affichage du message de chargement si demandé
-            if (config.loading_message) {
-                this._showNotification("Ouverture du projet en cours...", { type: "info" });
-            }
-
-            // Vérification de l'existence du projet
-            const projectExists = await this._checkProjectExists(numericProjectId);
-            if (!projectExists) {
-                throw new Error(`Le projet avec l'ID ${numericProjectId} n'existe pas ou n'est pas accessible`);
-            }
-
-            // Tentative d'ouverture via le service action
-            const actionResult = await this._openViaActionService(numericProjectId, config);
-            
-            if (actionResult.success) {
-                console.log("✅ Projet ouvert via service action");
-                this._showNotification("Projet ouvert avec succès", { type: "success" });
-                return true;
-            }
-
-            // Fallback si le service action échoue
-            if (config.fallback_enabled) {
-                console.warn("⚠️ Service action échoué, tentative de fallback");
-                const fallbackResult = await this._openViaFallback(numericProjectId, config);
-                
-                if (fallbackResult.success) {
-                    console.log("✅ Projet ouvert via fallback");
-                    this._showNotification("Projet ouvert (mode dégradé)", { type: "warning" });
-                    return true;
-                }
-            }
-
-            throw new Error("Impossible d'ouvrir le projet avec les méthodes disponibles");
-
-        } catch (error) {
-            return this._handleProjectOpenError(error, numericProjectId, config);
-        }
-    }
-
-    /**
-     * Valide l'ID du projet
-     * @param {*} projectId 
-     * @returns {boolean}
-     */
-    _validateProjectId(projectId) {
-        if (projectId === null || projectId === undefined) {
-            console.error("❌ Project ID is null or undefined");
-            return false;
-        }
-
-        const numericId = parseInt(projectId, 10);
-        if (isNaN(numericId) || numericId <= 0) {
-            console.error(`❌ Invalid project ID: ${projectId}`);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Vérifie si le projet existe et est accessible
-     * @param {number} projectId 
-     * @returns {Promise<boolean>}
-     */
-    async _checkProjectExists(projectId) {
-        try {
-            // Tentative via service ORM si disponible
-            if (this.services.orm) {
-                const projects = await this.services.orm.searchRead(
-                    'project.project',
-                    [['id', '=', projectId]],
-                    ['id', 'name'],
-                    { limit: 1 }
-                );
-                return projects.length > 0;
-            }
-
-            // Fallback via RPC direct
-            const result = await jsonrpc('/web/dataset/search_read', {
-                model: 'project.project',
-                domain: [['id', '=', projectId]],
-                fields: ['id', 'name'],
-                limit: 1
-            });
-
-            return result.records && result.records.length > 0;
-
-        } catch (error) {
-            console.warn(`⚠️ Impossible de vérifier l'existence du projet ${projectId}:`, error);
-            // En cas d'erreur de vérification, on assume que le projet existe
-            return true;
-        }
-    }
-
-    /**
-     * Ouvre le projet via le service action
-     * @param {number} projectId 
-     * @param {Object} config 
-     * @returns {Promise<{success: boolean, error?: string}>}
-     */
-    async _openViaActionService(projectId, config) {
-        try {
-            if (!this.services.action) {
-                return { success: false, error: "Service action non disponible" };
-            }
-
-            const actionData = {
-                type: 'ir.actions.act_window',
-                name: `Projet ${projectId}`,
-                res_model: 'project.project',
-                res_id: projectId,
-                views: [[false, config.view_type]],
-                target: config.target,
-                context: {
-                    ...config.context,
-                    default_res_id: projectId,
-                    active_id: projectId,
-                    active_model: 'project.project'
-                },
-                flags: {
-                    mode: 'readonly'
-                }
-            };
-
-            await this.services.action.doAction(actionData);
-            return { success: true };
-
-        } catch (error) {
-            console.error("❌ Erreur service action:", error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    /**
-     * Méthode de fallback pour ouvrir le projet
-     * @param {number} projectId 
-     * @param {Object} config 
-     * @returns {Promise<{success: boolean, error?: string}>}
-     */
-    async _openViaFallback(projectId, config) {
-        try {
-            // Méthode 1: Redirection directe via URL
-            // if (config.target === 'new') {
-            //     const projectUrl = `/web#id=${projectId}&model=project.project&view_type=${config.view_type}`;
-            //     window.open(projectUrl, '_blank', 'noopener,noreferrer');
-            //     return { success: true };
-            //}
-
-            // Méthode 2: Navigation dans la même fenêtre
-            if (typeof window !== 'undefined' && window.location) {
-                const currentUrl = new URL(window.location);
-                currentUrl.hash = `#id=${projectId}&model=project.project&view_type=${config.view_type}`;
-                window.location.href = currentUrl.toString();
-                return { success: true };
-            }
-
-            return { success: false, error: "Aucune méthode de fallback disponible" };
-
-        } catch (error) {
-            console.error("❌ Erreur fallback:", error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    /**
-     * Gère les erreurs d'ouverture de projet
-     * @param {Error} error 
-     * @param {number} projectId 
-     * @param {Object} config 
-     * @returns {boolean}
-     */
-    _handleProjectOpenError(error, projectId, config) {
-        const errorMessage = `Erreur ouverture projet ${projectId}: ${error.message}`;
-        
-        console.error("❌", errorMessage);
-        
-        // Log détaillé pour le debug
-        console.error("Détails erreur:", {
-            projectId,
-            config,
-            error: error.stack || error,
-            services: Object.keys(this.services).filter(key => this.services[key] !== null),
-            timestamp: new Date().toISOString()
-        });
-
-        // Ajout à l'état des erreurs système
-        if (!this.state.systemStatus.errors.includes(errorMessage)) {
-            this.state.systemStatus.errors.push(errorMessage);
-        }
-
-        // Notification utilisateur avec suggestions
-        let notificationMessage = errorMessage;
-        let suggestions = [];
-
-        if (error.message.includes("n'existe pas")) {
-            suggestions.push("Vérifiez que le projet n'a pas été supprimé");
-            suggestions.push("Actualisez le dashboard pour mettre à jour les données");
-        } else if (error.message.includes("Service")) {
-            suggestions.push("Rechargez la page pour réinitialiser les services");
-            suggestions.push("Contactez l'administrateur si le problème persiste");
-        }
-
-        if (suggestions.length > 0) {
-            notificationMessage += `\nSuggestions: ${suggestions.join('; ')}`;
-        }
-
-        this._showNotification(notificationMessage, { 
-            type: "danger",
-            sticky: true // Garde la notification visible plus longtemps
-        });
-
-        return false;
-    }
-
-    /**
-     * Version simplifiée pour ouverture rapide (pour compatibilité)
-     * @param {number|string} projectId 
-     */
-    async quickOpenProject(projectId) {
-        return await this.openProjectDetail(projectId, {
-            loading_message: false,
-            fallback_enabled: true
-        });
-    }
-
-    /**
-     * Ouvre un projet en mode lecture seule
-     * @param {number|string} projectId 
-     */
-    async openProjectReadonly(projectId) {
-        return await this.openProjectDetail(projectId, {
-            view_type: 'form',
-            context: { 'readonly': true },
-            target: 'new'
-        });
-    }
-
-    /**
-     * Ouvre la vue liste des projets avec le projet sélectionné
-     * @param {number|string} projectId 
-     */
-    async openProjectInList(projectId) {
-        if (!this._validateProjectId(projectId)) {
-            this._showNotification("ID de projet invalide", { type: "warning" });
-            return false;
-        }
-
-        try {
-            if (this.services.action) {
-                await this.services.action.doAction({
-                    type: 'ir.actions.act_window',
-                    name: 'Projets',
-                    res_model: 'project.project',
-                    views: [[false, 'list'], [false, 'form']],
-                    target: 'current',
-                    context: {
-                        'search_default_id': parseInt(projectId, 10)
-                    }
-                });
-                return true;
+            const response = await jsonrpc('/dashboard_projet/export_excel', params);
+            if (response.url) {
+                window.open(response.url, '_blank');
+                this._showNotification("Export Excel lancé", { type: "success" });
+            } else if (response.error) {
+                throw new Error(response.error);
             }
         } catch (error) {
-            console.error("❌ Erreur ouverture liste projets:", error);
-            this._showNotification(`Erreur: ${error.message}`, { type: "danger" });
+            throw new Error(`Erreur export Excel: ${error.message}`);
         }
-        
-        return false;
     }
 
-    // Version simplifiée si vous voulez garder la logique originale mais plus robuste
-    async openProjectDetailSimple(projectId) {
+    async _exportPDF(params) {
         try {
-            // Validation de base
-            if (!projectId || isNaN(parseInt(projectId))) {
-                this._showNotification("ID de projet invalide", { type: "warning" });
-                return;
+            const response = await jsonrpc('/dashboard_projet/export_pdf', params);
+            if (response.url) {
+                window.open(response.url, '_blank');
+                this._showNotification("Export PDF lancé", { type: "success" });
+            } else if (response.error) {
+                throw new Error(response.error);
+            }
+        } catch (error) {
+            throw new Error(`Erreur export PDF: ${error.message}`);
+        }
+    }
+
+    // ===== PROJECT DETAIL =====
+    
+    async openProjectDetail(projectId) {
+        try {
+            if (!projectId) {
+                throw new Error("ID de projet invalide");
             }
 
-            const numericProjectId = parseInt(projectId, 10);
-            
             if (this.services.action) {
                 await this.services.action.doAction({
                     type: 'ir.actions.act_window',
                     res_model: 'project.project',
-                    res_id: numericProjectId,
+                    res_id: projectId,
                     views: [[false, 'form']],
                     target: 'new',
-                    context: {
-                        active_id: numericProjectId,
-                        active_model: 'project.project'
-                    }
                 });
-                
-                this._showNotification("Projet ouvert", { type: "success" });
             } else {
-                // Fallback simple
-                const url = `/web#id=${numericProjectId}&model=project.project&view_type=form`;
-                window.open(url, '_blank', 'noopener,noreferrer');
-                this._showNotification("Projet ouvert (mode dégradé)", { type: "warning" });
+                this._showNotification("Service d'action non disponible", { type: "warning" });
             }
         } catch (error) {
             console.error("❌ Erreur ouverture projet:", error);
-            this._showNotification(`Erreur: ${error.message}`, { type: "danger" });
+            this._showNotification(`Erreur ouverture projet: ${error.message}`, { type: "danger" });
         }
+    }
+
+    // ===== DATA VALIDATION =====
+    
+    _validateAndNormalizeDashboardData(data) {
+        const normalized = this._getEmptyDashboardData();
+
+        if (data && typeof data === 'object') {
+            normalized.chiffre_affaires = this._safeNumber(data.chiffre_affaires);
+            
+            if (Array.isArray(data.projets)) {
+                normalized.projets = data.projets.map(this._validateProjectData.bind(this));
+            }
+            
+            if (data.marge_administrative && typeof data.marge_administrative === 'object') {
+                const ma = data.marge_administrative;
+                normalized.marge_administrative = {
+                    ca_total: this._safeNumber(ma.ca_total),
+                    cout_admin: this._safeNumber(ma.cout_admin),
+                    marge_admin: this._safeNumber(ma.marge_admin),
+                    taux_marge_admin: this._safeNumber(ma.taux_marge_admin)
+                };
+            }
+
+            if (data.budget_comparison) {
+                normalized.budget_comparison = data.budget_comparison;
+            }
+        }
+
+        return normalized;
+    }
+
+    _validateProjectData(projet) {
+        return {
+            id: projet.id || 0,
+            name: projet.name || `Projet ${projet.id || 'Unknown'}`,
+            ca: this._safeNumber(projet.ca),
+            nb_personnes: this._safeNumber(projet.nb_personnes, 0, true),
+            heures: this._safeNumber(projet.heures),
+            stage: projet.stage || 'Non défini',
+            budget_prevu: this._safeNumber(projet.budget_prevu),
+            budget_consomme: this._safeNumber(projet.budget_consomme),
+            marge_data: null
+        };
+    }
+
+    _validateMargeData(data) {
+        if (!data || typeof data !== 'object') {
+            return this._getEmptyMargeData();
+        }
+
+        return {
+            revenus: this._safeNumber(data.revenus),
+            cout_salarial: this._safeNumber(data.cout_salarial),
+            marge: this._safeNumber(data.marge),
+            taux_marge: this._safeNumber(data.taux_marge)
+        };
+    }
+
+    _safeNumber(value, defaultValue = 0, isInteger = false) {
+        const num = parseFloat(value) || defaultValue;
+        return isInteger ? Math.floor(num) : num;
     }
 
     // ===== ERROR HANDLING =====
@@ -1253,6 +626,24 @@ class DashboardProjet extends Component {
     }
 
     // ===== UTILITY METHODS =====
+    
+    _getEmptyDashboardData() {
+        return {
+            chiffre_affaires: 0,
+            projets: [],
+            marge_administrative: {
+                ca_total: 0,
+                cout_admin: 0,
+                marge_admin: 0,
+                taux_marge_admin: 0
+            },
+            budget_comparison: {
+                budget_total: 0,
+                budget_consomme: 0,
+                ecart_budget: 0
+            }
+        };
+    }
 
     _getEmptyMargeData() {
         return {
@@ -1309,6 +700,26 @@ class DashboardProjet extends Component {
         }, 0);
     }
 
+    getTotalBudget() {
+        if (!this.state.dashboardData.projets) return 0;
+        return this.state.dashboardData.projets.reduce((total, projet) => {
+            return total + (projet.budget_prevu || 0);
+        }, 0);
+    }
+
+    getBudgetConsomme() {
+        if (!this.state.dashboardData.projets) return 0;
+        return this.state.dashboardData.projets.reduce((total, projet) => {
+            return total + (projet.budget_consomme || 0);
+        }, 0);
+    }
+
+    getBudgetEcart() {
+        const total = this.getTotalBudget();
+        const consomme = this.getBudgetConsomme();
+        return total > 0 ? ((consomme / total - 1) * 100) : 0;
+    }
+
     getMargeProjet(projet) {
         return projet.marge_data ? (projet.marge_data.taux_marge || 0) : 0;
     }
@@ -1316,6 +727,12 @@ class DashboardProjet extends Component {
     getMargeClass(marge) {
         if (marge >= 20) return "bg-success";
         if (marge >= 10) return "bg-warning text-dark";
+        return "bg-danger";
+    }
+
+    getBudgetClass(ecart) {
+        if (ecart <= 0) return "bg-success";
+        if (ecart <= 10) return "bg-warning text-dark";
         return "bg-danger";
     }
 
@@ -1331,7 +748,20 @@ class DashboardProjet extends Component {
         return "fa-times-circle";
     }
 
+    showScrollToTop() {
+        return this.state.scrollPosition > 200;
+    }
+
     // ===== CLEANUP =====
+    
+    willDestroy() {
+        if (this.dateChangeTimeout) {
+            clearTimeout(this.dateChangeTimeout);
+        }
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+        }
+    }
 }
 
 // Register the component

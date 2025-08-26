@@ -1,85 +1,68 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="dashboard_projet.Dashboard">
-        <!-- Container principal avec layout flexible optimisé -->
-        <div class="dashboard-container">
-
-            <!-- Header fixe avec filtres et statut système -->
-            <div class="dashboard-header">
-                <div class="dashboard-controls">
+        <!-- Container principal avec design sobre -->
+        <div class="dashboard-container-modern">
+            
+            <!-- Header fixe avec filtres -->
+            <div class="dashboard-header-fixed">
+                <div class="container-fluid">
                     <div class="row align-items-center">
                         <div class="col-md-8">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <label class="form-label text-muted small">Date de début</label>
+                            <div class="dashboard-controls-grid">
+                                <div class="control-group">
+                                    <label class="control-label">Date de début</label>
                                     <input type="date" 
                                            t-model="state.dateDebut" 
                                            t-on-change="onDateChange"
-                                           class="form-control form-control-sm"/>
+                                           class="form-control-modern"/>
                                 </div>
-                                <div class="col-md-3">
-                                    <label class="form-label text-muted small">Date de fin</label>
+                                <div class="control-group">
+                                    <label class="control-label">Date de fin</label>
                                     <input type="date" 
                                            t-model="state.dateFin" 
                                            t-on-change="onDateChange"
-                                           class="form-control form-control-sm"/>
+                                           class="form-control-modern"/>
                                 </div>
-                                <div class="col-md-3">
-                                    <label class="form-label text-muted small">Actions</label>
-                                    <div>
-                                        <button class="btn btn-primary btn-sm me-1" 
-                                                t-on-click="refreshDashboard"
-                                                t-att-disabled="state.loading">
-                                            <i class="fa fa-refresh" 
-                                               t-att-class="state.loading ? 'fa-spin' : ''"/> 
-                                            Actualiser
+                                <div class="control-group">
+                                    <label class="control-label">Actions</label>
+                                    <div class="btn-group-modern">
+                                        <button class="btn-modern btn-export" 
+                                                t-on-click="() => exportDashboard('csv')"
+                                                t-att-disabled="state.loadingStates.export"
+                                                title="Export CSV">
+                                            <i class="fa fa-file-text"/> CSV
                                         </button>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label text-muted small">Export</label>
-                                    <div class="btn-group" role="group">
-                                        <button class="btn btn-outline-secondary btn-sm" 
-                                                t-on-click="exportToExcel"
-                                                t-att-disabled="state.loadingStates.export">
-                                            <i class="fa fa-file-excel-o me-1"/> Excel
+                                        <button class="btn-modern btn-export" 
+                                                t-on-click="() => exportDashboard('excel')"
+                                                t-att-disabled="state.loadingStates.export"
+                                                title="Export Excel">
+                                            <i class="fa fa-file-excel"/> Excel
                                         </button>
-                                        <button class="btn btn-outline-secondary btn-sm" 
-                                                t-on-click="exportToPDF"
-                                                t-att-disabled="state.loadingStates.export">
-                                            <i class="fa fa-file-pdf-o me-1"/> PDF
-                                        </button>
-                                        <button class="btn btn-outline-secondary btn-sm" 
-                                                t-on-click="exportToJSON"
-                                                t-att-disabled="state.loadingStates.export">
-                                            <i class="fa fa-file-code-o me-1"/> JSON
-                                        </button>
-                                        <button class="btn btn-outline-secondary btn-sm" 
-                                                t-on-click="exportToCSV"
-                                                t-att-disabled="state.loadingStates.export">
-                                            <i class="fa fa-file-text-o me-1"/> CSV
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm" 
-                                                t-on-click="testExports"
-                                                title="Tester tous les formats d'export">
-                                            <i class="fa fa-flask me-1"/> Test Exports
+                                        <button class="btn-modern btn-export" 
+                                                t-on-click="() => exportDashboard('pdf')"
+                                                t-att-disabled="state.loadingStates.export"
+                                                title="Export PDF">
+                                            <i class="fa fa-file-pdf"/> PDF
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4 text-end">
-                            <div class="system-status">
-                                <small t-att-class="'d-block ' + getHealthStatusClass()">
-                                    <i t-att-class="'fa ' + getHealthStatusIcon() + ' me-1'"/>
-                                    <t t-if="state.systemStatus.healthy">Système opérationnel</t>
-                                    <t t-elif="state.systemStatus.warnings.length">Système dégradé</t>
-                                    <t t-else="">Système indisponible</t>
-                                </small>
+                        <div class="col-md-4">
+                            <div class="system-status-modern">
+                                <div t-att-class="'status-indicator ' + getHealthStatusClass()">
+                                    <i t-att-class="'fa ' + getHealthStatusIcon()"/>
+                                    <span class="status-text">
+                                        <t t-if="state.systemStatus.healthy">Système opérationnel</t>
+                                        <t t-elif="state.systemStatus.warnings.length">Système dégradé</t>
+                                        <t t-else="">Système indisponible</t>
+                                    </span>
+                                </div>
                                 <t t-if="state.systemStatus.lastCheck">
-                                    <small class="text-muted">
+                                    <div class="status-time">
                                         Dernière vérif: <t t-esc="new Date(state.systemStatus.lastCheck).toLocaleTimeString('fr-FR')"/>
-                                    </small>
+                                    </div>
                                 </t>
                             </div>
                         </div>
@@ -87,19 +70,19 @@
                 </div>
             </div>
 
-            <!-- Alertes système (fixe sous le header) -->
+            <!-- Alertes système -->
             <t t-if="state.systemStatus.errors.length or state.systemStatus.warnings.length">
-                <div class="dashboard-alerts">
+                <div class="dashboard-alerts-modern">
                     <t t-foreach="state.systemStatus.errors" t-as="error" t-key="error_index">
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <i class="fa fa-exclamation-triangle me-2"/>
-                            <t t-esc="error"/>
+                        <div class="alert-modern alert-error">
+                            <i class="fa fa-exclamation-triangle"/>
+                            <span t-esc="error"/>
                         </div>
                     </t>
                     <t t-foreach="state.systemStatus.warnings" t-as="warning" t-key="warning_index">
-                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                            <i class="fa fa-exclamation-circle me-2"/>
-                            <t t-esc="warning"/>
+                        <div class="alert-modern alert-warning">
+                            <i class="fa fa-exclamation-circle"/>
+                            <span t-esc="warning"/>
                         </div>
                     </t>
                 </div>
@@ -107,1613 +90,431 @@
 
             <!-- Loading overlay global -->
             <t t-if="state.loading">
-                <div class="dashboard-loading">
-                    <div class="loading-content">
-                        <i class="fa fa-spinner fa-spin fa-3x text-primary mb-3"/>
-                        <h5>Chargement des données...</h5>
-                        <div class="progress mt-3" style="width: 200px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                 role="progressbar" style="width: 100%"/>
+                <div class="loading-overlay-modern">
+                    <div class="loading-spinner">
+                        <div class="spinner-modern"></div>
+                        <div class="loading-text">Chargement des données...</div>
+                        <div class="loading-progress">
+                            <div class="progress-bar-modern"></div>
                         </div>
                     </div>
                 </div>
             </t>
 
-            <!-- Contenu principal scrollable -->
-            <div class="dashboard-scroll-container">
-                <div class="dashboard-content" t-att-class="state.loading ? 'loading' : ''">
-
-                    <!-- Métriques principales -->
-                    <div class="dashboard-section metrics-section">
-                        <div class="row g-3">
-                            <!-- Chiffre d'affaires -->
-                            <div class="col-xl-3 col-lg-6">
-                                <div class="metric-card ca-card">
-                                    <div class="metric-header">
-                                        <div class="metric-icon">
-                                            <i class="fa fa-euro-sign"/>
-                                        </div>
-                                        <div class="metric-info">
-                                            <h6 class="metric-title">Chiffre d'Affaires</h6>
-                                            <div class="metric-value">
-                                                <t t-esc="formatCurrency(state.dashboardData.chiffre_affaires)"/>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="metric-footer">
-                                        <small class="text-muted">
-                                            Période: <t t-esc="state.dateDebut"/> au <t t-esc="state.dateFin"/>
-                                        </small>
-                                    </div>
+            <!-- Contenu scrollable -->
+            <div class="dashboard-content-scrollable" 
+                 t-ref="scrollContainer"
+                 t-att-class="state.loading ? 'loading' : ''">
+                
+                <!-- Métriques principales avec design sobre -->
+                <section class="metrics-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Vue d'ensemble</h2>
+                        <div class="section-subtitle">Indicateurs clés de performance</div>
+                    </div>
+                    
+                    <div class="metrics-grid">
+                        <!-- Chiffre d'affaires -->
+                        <div class="metric-card-modern metric-ca">
+                            <div class="metric-content">
+                                <div class="metric-icon-modern">
+                                    <i class="fa fa-euro-sign"/>
                                 </div>
-                            </div>
-
-                            <!-- Projets actifs -->
-                            <div class="col-xl-3 col-lg-6">
-                                <div class="metric-card projects-card">
-                                    <div class="metric-header">
-                                        <div class="metric-icon">
-                                            <i class="fa fa-project-diagram"/>
-                                        </div>
-                                        <div class="metric-info">
-                                            <h6 class="metric-title">Projets En Cours</h6>
-                                            <div class="metric-value">
-                                                <t t-esc="state.dashboardData.projets?.length || 0"/>
-                                            </div>
-                                        </div>
+                                <div class="metric-info">
+                                    <div class="metric-label">Chiffre d'Affaires</div>
+                                    <div class="metric-value-modern">
+                                        <t t-esc="formatCurrency(state.dashboardData.chiffre_affaires)"/>
                                     </div>
-                                    <div class="metric-footer">
-                                        <small class="text-muted">
-                                            Total heures: <t t-esc="formatNumber(getTotalHeures(), 0)"/>h
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Personnel -->
-                            <div class="col-xl-3 col-lg-6">
-                                <div class="metric-card personnel-card">
-                                    <div class="metric-header">
-                                        <div class="metric-icon">
-                                            <i class="fa fa-users"/>
-                                        </div>
-                                        <div class="metric-info">
-                                            <h6 class="metric-title">Personnel Mobilisé</h6>
-                                            <div class="metric-value">
-                                                <t t-esc="getTotalPersonnel()"/>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="metric-footer">
-                                        <small class="text-muted">
-                                            Personnes sur projets
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Marge administrative -->
-                            <div class="col-xl-3 col-lg-6">
-                                <div class="metric-card margin-card">
-                                    <div class="metric-header">
-                                        <div class="metric-icon">
-                                            <i class="fa fa-chart-line"/>
-                                        </div>
-                                        <div class="metric-info">
-                                            <h6 class="metric-title">Marge Administrative</h6>
-                                            <div class="metric-value">
-                                                <t t-esc="formatPercentage(state.dashboardData.marge_administrative?.taux_marge_admin || 0)"/>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="metric-footer">
-                                        <small class="text-muted">
-                                            Marge: <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.marge_admin || 0)"/>
-                                        </small>
+                                    <div class="metric-subtitle">
+                                        Période: <t t-esc="state.dateDebut"/> au <t t-esc="state.dateFin"/>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Résumé financier détaillé -->
-                    <div class="dashboard-section financial-section">
-                        <div class="row">
-                            <div class="col-lg-8">
-                                <div class="summary-card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0" style="color:#ffffff">
-                                            <i class="fa fa-calculator me-2"/>
-                                            Résumé Financier Détaillé
-                                        </h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="row">
-                                            <div class="col-md-4">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">CA Total</div>
-                                                    <div class="summary-value text-success">
-                                                        <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.ca_total || 0)"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">Coûts Admin</div>
-                                                    <div class="summary-value text-warning">
-                                                        <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.cout_admin || 0)"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">Marge Nette</div>
-                                                    <div class="summary-value text-primary">
-                                                        <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.marge_admin || 0)"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <!-- Projets actifs -->
+                        <div class="metric-card-modern metric-projects">
+                            <div class="metric-content">
+                                <div class="metric-icon-modern">
+                                    <i class="fa fa-project-diagram"/>
                                 </div>
-                            </div>
-                            <div class="col-lg-4">
-                                <div class="summary-card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0" style="color:#ffffff">
-                                            <i class="fa fa-chart-pie me-2"/>
-                                            Répartition
-                                        </h6>
+                                <div class="metric-info">
+                                    <div class="metric-label">Projets Actifs</div>
+                                    <div class="metric-value-modern">
+                                        <t t-esc="state.dashboardData.projets?.length || 0"/>
                                     </div>
-                                    <div class="card-body">
-                                        <div class="margin-gauge">
-                                            <div class="gauge-container">
-                                                <t t-set="margin_percentage" t-value="state.dashboardData.marge_administrative?.taux_marge_admin || 0"/>
-                                                <div class="circular-progress" t-att-data-percentage="margin_percentage">
-                                                    <div class="gauge-text">
-                                                        <span class="percentage"><t t-esc="formatPercentage(margin_percentage)"/></span>
-                                                        <small>Marge</small>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <div class="metric-subtitle">
+                                        <t t-esc="formatNumber(getTotalHeures(), 0)"/>h travaillées
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Ajouter ces sections au template -->
-
-                    <!-- Section Budget après la section financière -->
-                    <div class="dashboard-section budget-section">
-                        <div class="row">
-                            <div class="col-lg-12">
-                                <div class="summary-card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0" style="color:#ffffff">
-                                            <i class="fa fa-money-bill-wave me-2"/>
-                                            Données Budgétaires
-                                        </h6>
+                        <!-- Personnel -->
+                        <div class="metric-card-modern metric-personnel">
+                            <div class="metric-content">
+                                <div class="metric-icon-modern">
+                                    <i class="fa fa-users"/>
+                                </div>
+                                <div class="metric-info">
+                                    <div class="metric-label">Personnel Affecté</div>
+                                    <div class="metric-value-modern">
+                                        <t t-esc="getTotalPersonnel()"/>
                                     </div>
-                                    <div class="card-body">
-                                        <div class="row">
-                                            <div class="col-md-3">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">Budget Total</div>
-                                                    <div class="summary-value text-info">
-                                                        <t t-esc="formatCurrency(state.dashboardData.budget_data?.total_budget || 0)"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">Budget Utilisé</div>
-                                                    <div class="summary-value text-warning">
-                                                        <t t-esc="formatCurrency(state.dashboardData.budget_data?.budget_utilise || 0)"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">Budget Restant</div>
-                                                    <div class="summary-value text-success">
-                                                        <t t-esc="formatCurrency(state.dashboardData.budget_data?.budget_restant || 0)"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="summary-item">
-                                                    <div class="summary-label">Taux d'Utilisation</div>
-                                                    <div t-att-class="'summary-value ' + getBudgetUtilisationClass(state.dashboardData.budget_data?.taux_utilisation || 0)">
-                                                        <t t-esc="formatPercentage(state.dashboardData.budget_data?.taux_utilisation || 0)"/>
-                                                        <small class="d-block">
-                                                            <t t-esc="getBudgetUtilisationText(state.dashboardData.budget_data?.taux_utilisation || 0)"/>
-                                                        </small>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Tableau des projets avec budget -->
-                                        <t t-if="state.dashboardData.budget_data?.projets_budget?.length">
-                                            <div class="mt-4">
-                                                <h6 class="mb-3">Détail par Projet</h6>
-                                                <div class="table-responsive">
-                                                    <table class="table table-sm table-hover">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Projet</th>
-                                                                <th class="text-end">Budget</th>
-                                                                <th class="text-end">CA Réalisé</th>
-                                                                <th class="text-end">Budget Restant</th>
-                                                                <th class="text-end">Utilisation</th>
-                                                                <th class="text-center">État</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            <!-- Par cette version corrigée avec t-key : -->
-                                                            <t t-foreach="state.dashboardData.budget_data.projets_budget" t-as="projet" t-key="projet.id">
-                                                                <tr>
-                                                                    <td>
-                                                                        <a t-att-href="'/web#id=' + projet.id + '&amp;model=project.project&amp;view_type=form'"
-                                                                        target="_blank">
-                                                                            <t t-esc="projet.name"/>
-                                                                        </a>
-                                                                    </td>
-                                                                    <td class="text-end">
-                                                                        <t t-esc="formatCurrency(projet.budget)"/>
-                                                                    </td>
-                                                                    <td class="text-end">
-                                                                        <t t-esc="formatCurrency(projet.ca_realise)"/>
-                                                                    </td>
-                                                                    <td class="text-end">
-                                                                        <t t-esc="formatCurrency(projet.budget_restant)"/>
-                                                                    </td>
-                                                                    <td class="text-end">
-                                                                        <t t-esc="formatPercentage(projet.taux_utilisation)"/>
-                                                                    </td>
-                                                                    <td class="text-center">
-                                                                        <span t-att-class="'badge ' + getBudgetUtilisationClass(projet.taux_utilisation)">
-                                                                            <t t-esc="getBudgetUtilisationText(projet.taux_utilisation)"/>
-                                                                        </span>
-                                                                    </td>
-                                                                </tr>
-                                                            </t>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </t>
-                                        <t t-else="">
-                                            <div class="alert alert-info mt-3 mb-0">
-                                                <i class="fa fa-info-circle me-2"/>
-                                                Aucun projet avec budget défini dans la période sélectionnée.
-                                            </div>
-                                        </t>
+                                    <div class="metric-subtitle">
+                                        Personnes sur projets
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Section Graphiques après la section budget -->
-                    <div class="dashboard-section graphiques-section">
-                        <div class="row">
-                            <div class="col-lg-12">
-                                <div class="summary-card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0" style="color:#ffffff">
-                                            <i class="fa fa-chart-bar me-2"/>
-                                            Graphiques
-                                        </h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="row">
-                                            <!-- Graphique CA par projet -->
-                                            <div class="col-lg-6 mb-4">
-                                                <div class="chart-container">
-                                                    <canvas id="graphique-ca" height="300"/>
-                                                </div>
-                                            </div>
-
-                                            <!-- Graphique répartition statuts -->
-                                            <div class="col-lg-6 mb-4">
-                                                <div class="chart-container">
-                                                    <canvas id="graphique-statuts" height="300"/>
-                                                </div>
-                                            </div>
-
-                                            <!-- Graphique évolution mensuelle -->
-                                            <div class="col-lg-12">
-                                                <div class="chart-container">
-                                                    <canvas id="graphique-evolution" height="250"/>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <!-- Budget -->
+                        <div class="metric-card-modern metric-budget">
+                            <div class="metric-content">
+                                <div class="metric-icon-modern">
+                                    <i class="fa fa-chart-pie"/>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tableau des projets avec scroll interne -->
-                    <div class="dashboard-section projects-section">
-                        <div class="projects-table-container">
-                            <div class="card">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0" style="color:#ffffff">
-                                        <i class="fa fa-table me-2"/>
-                                        Détail des Projets
-                                        <span class="badge bg-primary ms-2">
-                                            <t t-esc="state.dashboardData.projets?.length || 0"/>
+                                <div class="metric-info">
+                                    <div class="metric-label">Budget Total</div>
+                                    <div class="metric-value-modern">
+                                        <t t-esc="formatCurrency(getTotalBudget())"/>
+                                    </div>
+                                    <div class="metric-subtitle">
+                                        <t t-set="ecart" t-value="getBudgetEcart()"/>
+                                        <span t-att-class="getBudgetClass(ecart)">
+                                            <t t-if="ecart >= 0">+</t><t t-esc="formatPercentage(ecart)"/> écart
                                         </span>
-                                    </h6>
-                                    <div class="table-actions">
-                                        <t t-if="state.loadingStates.margins">
-                                            <small class="text-muted">
-                                                <i class="fa fa-spinner fa-spin me-1"/>
-                                                Chargement marges...
-                                            </small>
-                                        </t>
                                     </div>
-                                </div>
-                                
-                                <div class="table-scroll-wrapper">
-                                    <t t-if="!state.dashboardData.projets?.length and !state.loading">
-                                        <div class="empty-state">
-                                            <i class="fa fa-inbox fa-3x text-muted mb-3"/>
-                                            <h5 class="text-muted">Aucun projet trouvé</h5>
-                                            <p class="text-muted mb-3">
-                                                Aucun projet n'a été trouvé pour la période sélectionnée.
-                                            </p>
-                                            <button class="btn btn-primary" t-on-click="refreshDashboard">
-                                                <i class="fa fa-refresh me-1"/> Actualiser
-                                            </button>
-                                        </div>
-                                    </t>
-                                    
-                                    <t t-else="">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover projects-table">
-                                                <thead class="table-dark sticky-header">
-                                                    <tr>
-                                                        <th class="sortable">
-                                                            <i class="fa fa-project-diagram me-1"/>
-                                                            Projet
-                                                        </th>
-                                                        <th class="text-end sortable">
-                                                            <i class="fa fa-euro-sign me-1"/>
-                                                            CA
-                                                        </th>
-                                                        <th class="text-center">
-                                                            <i class="fa fa-users me-1"/>
-                                                            Personnel
-                                                        </th>
-                                                        <th class="text-end">
-                                                            <i class="fa fa-clock me-1"/>
-                                                            Heures
-                                                        </th>
-                                                        <th class="text-center">
-                                                            <i class="fa fa-percentage me-1"/>
-                                                            Marge
-                                                        </th>
-                                                        <th class="text-center">
-                                                            <i class="fa fa-flag me-1"/>
-                                                            Statut
-                                                        </th>
-                                                        <th class="text-center">Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <t t-foreach="state.dashboardData.projets || []" t-as="projet" t-key="projet.id">
-                                                        <tr class="project-row" t-att-data-project-id="projet.id">
-                                                            <!-- Nom du projet -->
-                                                            <td class="project-name">
-                                                                <div class="project-info">
-                                                                    <div class="project-title" t-att-title="projet.name">
-                                                                        <t t-esc="projet.name"/>
-                                                                    </div>
-                                                                    <small class="project-id text-muted">
-                                                                        #<t t-esc="projet.id"/>
-                                                                    </small>
-                                                                </div>
-                                                            </td>
-
-                                                            <!-- CA -->
-                                                            <td class="text-end">
-                                                                <span class="amount-value">
-                                                                    <t t-esc="formatCurrency(projet.ca)"/>
-                                                                </span>
-                                                            </td>
-
-                                                            <!-- Personnel -->
-                                                            <td class="text-center">
-                                                                <span class="badge rounded-pill bg-info text-dark">
-                                                                    <i class="fa fa-user me-1"/>
-                                                                    <t t-esc="projet.nb_personnes"/>
-                                                                </span>
-                                                            </td>
-
-                                                            <!-- Heures -->
-                                                            <td class="text-end">
-                                                                <span class="hours-value">
-                                                                    <t t-esc="formatNumber(projet.heures, 1)"/>h
-                                                                </span>
-                                                            </td>
-
-                                                            <!-- Marge -->
-                                                            <td class="text-center">
-                                                                <t t-set="marge" t-value="getMargeProjet(projet)"/>
-                                                                <t t-if="projet.marge_data">
-                                                                    <span t-att-class="'badge rounded-pill ' + getMargeClass(marge)" 
-                                                                          t-att-title="'Revenus: ' + formatCurrency(projet.marge_data.revenus) + ' - Coûts: ' + formatCurrency(projet.marge_data.cout_salarial)">
-                                                                        <t t-esc="formatPercentage(marge)"/>
-                                                                    </span>
-                                                                </t>
-                                                                <t t-else="">
-                                                                    <span class="badge bg-secondary" title="Calcul en cours...">
-                                                                        <i class="fa fa-spinner fa-spin"/>
-                                                                    </span>
-                                                                </t>
-                                                            </td>
-
-                                                            <!-- Statut -->
-                                                            <td class="text-center">
-                                                                <span class="badge bg-outline-secondary rounded-pill">
-                                                                    <t t-esc="projet.stage"/>
-                                                                </span>
-                                                            </td>
-
-                                                            <!-- Actions -->
-                                                            <td class="text-center">
-                                                                <button class="btn btn-sm btn-outline-primary" 
-                                                                        t-on-click="openProjectDetail.bind(this, projet.id)"
-                                                                        title="Voir le détail du projet">
-                                                                    <i class="fa fa-eye"/>
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    </t>
-                                                </tbody>
-
-                                                <!-- Footer du tableau avec totaux -->
-                                                <tfoot class="table-light sticky-footer">
-                                                    <tr>
-                                                        <th class="text-end">
-                                                            <strong>TOTAUX:</strong>
-                                                        </th>
-                                                        <th class="text-end">
-                                                            <strong class="text-success">
-                                                                <t t-esc="formatCurrency(state.dashboardData.projets?.reduce((sum, p) => sum + (p.ca || 0), 0) || 0)"/>
-                                                            </strong>
-                                                        </th>
-                                                        <th class="text-center">
-                                                            <strong class="text-info">
-                                                                <t t-esc="getTotalPersonnel()"/>
-                                                            </strong>
-                                                        </th>
-                                                        <th class="text-end">
-                                                            <strong class="text-primary">
-                                                                <t t-esc="formatNumber(getTotalHeures(), 0)"/>h
-                                                            </strong>
-                                                        </th>
-                                                        <th colspan="3" class="text-center">
-                                                            <small class="text-muted">
-                                                                <t t-esc="state.dashboardData.projets?.length || 0"/> projet(s)
-                                                            </small>
-                                                        </th>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    </t>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </section>
 
-                </div>
+                <!-- Section graphiques -->
+                <section class="charts-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Analyses graphiques</h2>
+                        <div class="section-subtitle">Visualisation des tendances</div>
+                    </div>
+                    
+                    <div class="charts-grid">
+                        <!-- Graphique évolution CA -->
+                        <div class="chart-card-modern">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Évolution du CA</h3>
+                                <div class="chart-loading" t-if="state.loadingStates.charts">
+                                    <i class="fa fa-spinner fa-spin"/> Chargement...
+                                </div>
+                            </div>
+                            <div class="chart-content">
+                                <canvas id="caEvolutionChart" width="400" height="200"/>
+                            </div>
+                        </div>
+
+                        <!-- Graphique répartition projets -->
+                        <div class="chart-card-modern">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Projets par statut</h3>
+                            </div>
+                            <div class="chart-content">
+                                <canvas id="projectsStageChart" width="400" height="200"/>
+                            </div>
+                        </div>
+
+                        <!-- Graphique marges -->
+                        <div class="chart-card-modern chart-full-width">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Marges par projet</h3>
+                            </div>
+                            <div class="chart-content">
+                                <canvas id="margeChart" width="800" height="300"/>
+                            </div>
+                        </div>
+
+                        <!-- Graphique budget vs réalisé -->
+                        <div class="chart-card-modern chart-full-width">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Budget vs Réalisé</h3>
+                            </div>
+                            <div class="chart-content">
+                                <canvas id="budgetChart" width="800" height="300"/>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Résumé financier détaillé -->
+                <section class="summary-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Résumé financier</h2>
+                        <div class="section-subtitle">Détail des marges et coûts</div>
+                    </div>
+                    
+                    <div class="summary-grid">
+                        <div class="summary-card-modern">
+                            <div class="summary-item">
+                                <div class="summary-label">CA Total</div>
+                                <div class="summary-value text-success">
+                                    <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.ca_total || 0)"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="summary-card-modern">
+                            <div class="summary-item">
+                                <div class="summary-label">Coûts Admin</div>
+                                <div class="summary-value text-warning">
+                                    <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.cout_admin || 0)"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="summary-card-modern">
+                            <div class="summary-item">
+                                <div class="summary-label">Marge Nette</div>
+                                <div class="summary-value text-primary">
+                                    <t t-esc="formatCurrency(state.dashboardData.marge_administrative?.marge_admin || 0)"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="summary-card-modern">
+                            <div class="summary-item">
+                                <div class="summary-label">Taux de Marge</div>
+                                <div class="summary-value">
+                                    <t t-set="taux" t-value="state.dashboardData.marge_administrative?.taux_marge_admin || 0"/>
+                                    <span t-att-class="getMargeClass(taux)">
+                                        <t t-esc="formatPercentage(taux)"/>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tableau des projets moderne -->
+                <section class="projects-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Détail des projets</h2>
+                        <div class="section-subtitle">
+                            <span class="project-count">
+                                <t t-esc="state.dashboardData.projets?.length || 0"/> projet(s)
+                            </span>
+                            <t t-if="state.loadingStates.margins">
+                                <span class="loading-indicator">
+                                    <i class="fa fa-spinner fa-spin"/> Chargement marges...
+                                </span>
+                            </t>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container-modern">
+                        <t t-if="!state.dashboardData.projets?.length and !state.loading">
+                            <div class="empty-state-modern">
+                                <div class="empty-icon">
+                                    <i class="fa fa-inbox"/>
+                                </div>
+                                <div class="empty-title">Aucun projet trouvé</div>
+                                <div class="empty-subtitle">
+                                    Aucun projet n'a été trouvé pour la période sélectionnée.
+                                </div>
+                                <button class="btn-modern btn-primary" t-on-click="refreshDashboard">
+                                    <i class="fa fa-refresh"/> Actualiser
+                                </button>
+                            </div>
+                        </t>
+                        
+                        <t t-else="">
+                            <div class="table-scroll">
+                                <table class="table-modern">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-project">
+                                                <i class="fa fa-project-diagram"/> Projet
+                                            </th>
+                                            <th class="col-numeric">
+                                                <i class="fa fa-euro-sign"/> CA
+                                            </th>
+                                            <th class="col-center">
+                                                <i class="fa fa-users"/> Personnel
+                                            </th>
+                                            <th class="col-numeric">
+                                                <i class="fa fa-clock"/> Heures
+                                            </th>
+                                            <th class="col-numeric">
+                                                <i class="fa fa-chart-pie"/> Budget
+                                            </th>
+                                            <th class="col-center">
+                                                <i class="fa fa-percentage"/> Marge
+                                            </th>
+                                            <th class="col-center">
+                                                <i class="fa fa-flag"/> Statut
+                                            </th>
+                                            <th class="col-actions">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="state.dashboardData.projets || []" t-as="projet" t-key="projet.id">
+                                            <tr class="project-row-modern" t-att-data-project-id="projet.id">
+                                                <!-- Nom du projet -->
+                                                <td class="project-name-cell">
+                                                    <div class="project-info-modern">
+                                                        <div class="project-title-modern" t-att-title="projet.name">
+                                                            <t t-esc="projet.name"/>
+                                                        </div>
+                                                        <div class="project-id-modern">
+                                                            #<t t-esc="projet.id"/>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- CA -->
+                                                <td class="numeric-cell">
+                                                    <div class="amount-display">
+                                                        <t t-esc="formatCurrency(projet.ca)"/>
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- Personnel -->
+                                                <td class="center-cell">
+                                                    <div class="badge-modern badge-info">
+                                                        <i class="fa fa-user"/>
+                                                        <t t-esc="projet.nb_personnes"/>
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- Heures -->
+                                                <td class="numeric-cell">
+                                                    <div class="hours-display">
+                                                        <t t-esc="formatNumber(projet.heures, 1)"/>h
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- Budget -->
+                                                <td class="numeric-cell">
+                                                    <div class="budget-info">
+                                                        <div class="budget-value">
+                                                            <t t-esc="formatCurrency(projet.budget_prevu || 0)"/>
+                                                        </div>
+                                                        <t t-if="projet.budget_prevu">
+                                                            <div class="budget-usage">
+                                                                <t t-set="usage" t-value="((projet.budget_consomme || 0) / projet.budget_prevu) * 100"/>
+                                                                <div class="progress-mini">
+                                                                    <div class="progress-bar-mini" 
+                                                                         t-att-style="'width: ' + Math.min(usage, 100) + '%'"
+                                                                         t-att-class="usage > 100 ? 'over-budget' : (usage > 80 ? 'warning-budget' : 'normal-budget')"/>
+                                                                </div>
+                                                                <small><t t-esc="formatPercentage(usage)"/> utilisé</small>
+                                                            </div>
+                                                        </t>
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- Marge -->
+                                                <td class="center-cell">
+                                                    <t t-set="marge" t-value="getMargeProjet(projet)"/>
+                                                    <t t-if="projet.marge_data">
+                                                        <div class="marge-display" 
+                                                             t-att-class="getMargeClass(marge)"
+                                                             t-att-title="'Revenus: ' + formatCurrency(projet.marge_data.revenus) + ' - Coûts: ' + formatCurrency(projet.marge_data.cout_salarial)">
+                                                            <div class="marge-percentage">
+                                                                <t t-esc="formatPercentage(marge)"/>
+                                                            </div>
+                                                            <div class="marge-amount">
+                                                                <t t-esc="formatCurrency(projet.marge_data.marge)"/>
+                                                            </div>
+                                                        </div>
+                                                    </t>
+                                                    <t t-else="">
+                                                        <div class="marge-loading">
+                                                            <i class="fa fa-spinner fa-spin"/>
+                                                            <small>Calcul...</small>
+                                                        </div>
+                                                    </t>
+                                                </td>
+                                                
+                                                <!-- Statut -->
+                                                <td class="center-cell">
+                                                    <div class="status-badge-modern">
+                                                        <t t-esc="projet.stage"/>
+                                                    </div>
+                                                </td>
+                                                
+                                                <!-- Actions -->
+                                                <td class="actions-cell">
+                                                    <button class="btn-action-modern" 
+                                                            t-on-click="() => openProjectDetail(projet.id)"
+                                                            title="Voir le détail du projet">
+                                                        <i class="fa fa-eye"/>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                    
+                                    <!-- Footer avec totaux -->
+                                    <tfoot>
+                                        <tr class="totals-row">
+                                            <td class="totals-label">
+                                                <strong>TOTAUX</strong>
+                                            </td>
+                                            <td class="numeric-cell">
+                                                <strong class="text-success">
+                                                    <t t-esc="formatCurrency(state.dashboardData.projets?.reduce((sum, p) => sum + (p.ca || 0), 0) || 0)"/>
+                                                </strong>
+                                            </td>
+                                            <td class="center-cell">
+                                                <strong class="text-info">
+                                                    <t t-esc="getTotalPersonnel()"/>
+                                                </strong>
+                                            </td>
+                                            <td class="numeric-cell">
+                                                <strong class="text-primary">
+                                                    <t t-esc="formatNumber(getTotalHeures(), 0)"/>h
+                                                </strong>
+                                            </td>
+                                            <td class="numeric-cell">
+                                                <strong class="text-warning">
+                                                    <t t-esc="formatCurrency(getTotalBudget())"/>
+                                                </strong>
+                                            </td>
+                                            <td colspan="3" class="center-cell">
+                                                <small class="text-muted">
+                                                    <t t-esc="state.dashboardData.projets?.length || 0"/> projet(s)
+                                                </small>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </t>
+                    </div>
+                </section>
             </div>
 
-            <!-- Footer fixe -->
-            <div class="dashboard-footer">
-                <div class="footer-content">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <small class="text-muted">
-                                <i class="fa fa-info-circle me-1"/>
+            <!-- Scroll to top button -->
+            <t t-if="showScrollToTop()">
+                <button class="scroll-to-top-btn" t-on-click="scrollToTop" title="Retour en haut">
+                    <i class="fa fa-chevron-up"/>
+                </button>
+            </t>
+
+            <!-- Footer -->
+            <div class="dashboard-footer-modern">
+                <div class="container-fluid">
+                    <div class="footer-content">
+                        <div class="footer-left">
+                            <div class="footer-info">
+                                <i class="fa fa-info-circle"/>
                                 Dernière mise à jour: <t t-esc="new Date().toLocaleString('fr-FR')"/>
-                            </small>
+                            </div>
                         </div>
-                        <div class="col-md-6 text-end">
-                            <small class="text-muted">
-                                Dashboard Projets v2.0 - 
-                                <t t-esc="new Date().getFullYear()"/>
-                            </small>
+                        <div class="footer-right">
+                            <div class="footer-version">
+                                Dashboard Projets v2.0 - Odoo 17 - <t t-esc="new Date().getFullYear()"/>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Ajouter du CSS pour les graphiques -->
-        <style>
-            .chart-container {
-                position: relative;
-                height: 300px;
-                min-height: 250px;
-            }
-                        
-            .budget-section .summary-item {
-                text-align: center;
-                padding: 15px;
-                border-radius: 8px;
-                background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-            }
-                        
-            .budget-section .summary-label {
-                font-size: 0.85rem;
-                color: #6c757d;
-                margin-bottom: 5px;
-            }
-                        
-            .budget-section .summary-value {
-                font-size: 1.4rem;
-                font-weight: 600;
-            }
-                        
-            .table-responsive {
-                max-height: 400px;
-                overflow-y: auto;
-            }
-        </style>
-
-        <!-- Styles CSS optimisés pour le scroll -->
-        <style>
-            /* ===== RESET ET BASE ===== */
-            * {
-                box-sizing: border-box;
-            }
-            
-            /* ===== DASHBOARD LAYOUT OPTIMISÉ ===== */
-            .dashboard-container {
-                height: 100vh;
-                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-            }
-            
-            /* Header fixe */
-            .dashboard-header {
-                background: white;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                padding: 1.5rem;
-                z-index: 100;
-                flex-shrink: 0;
-                position: relative;
-            }
-            
-            /* Alertes fixées sous le header */
-            .dashboard-alerts {
-                background: rgba(255,255,255,0.95);
-                backdrop-filter: blur(5px);
-                padding: 0.5rem 2rem;
-                z-index: 99;
-                flex-shrink: 0;
-                border-bottom: 1px solid rgba(0,0,0,0.05);
-            }
-            
-            /* Container de scroll principal */
-            .dashboard-scroll-container {
-                flex: 1;
-                overflow-y: auto;
-                overflow-x: hidden;
-                position: relative;
-            }
-            
-            /* Contenu scrollable */
-            .dashboard-content {
-                padding: 2rem;
-                min-height: 100%;
-                transition: opacity 0.3s ease;
-            }
-            
-            .dashboard-content.loading {
-                opacity: 0.6;
-                pointer-events: none;
-            }
-            
-            .dashboard-section {
-                margin-bottom: 2.5rem;
-            }
-            
-            /* Footer fixe */
-            .dashboard-footer {
-                background: white;
-                border-top: 1px solid #dee2e6;
-                padding: 1rem 2rem;
-                z-index: 100;
-                flex-shrink: 0;
-            }
-            
-            /* ===== SCROLL PERSONNALISÉ ===== */
-            .dashboard-scroll-container {
-                scrollbar-width: thin;
-                scrollbar-color: #c1c1c1 transparent;
-            }
-            
-            .dashboard-scroll-container::-webkit-scrollbar {
-                width: 12px;
-            }
-            
-            .dashboard-scroll-container::-webkit-scrollbar-track {
-                background: rgba(0,0,0,0.05);
-                border-radius: 6px;
-            }
-            
-            .dashboard-scroll-container::-webkit-scrollbar-thumb {
-                background: linear-gradient(180deg, #007bff, #0056b3);
-                border-radius: 6px;
-                border: 2px solid transparent;
-                background-clip: content-box;
-            }
-            
-            .dashboard-scroll-container::-webkit-scrollbar-thumb:hover {
-                background: linear-gradient(180deg, #0056b3, #004085);
-                background-clip: content-box;
-            }
-            
-            /* ===== TABLE SCROLL WRAPPER ===== */
-            .table-scroll-wrapper {
-                max-height: 60vh;
-                overflow-y: auto;
-                overflow-x: auto;
-                border-radius: 0 0 15px 15px;
-                position: relative;
-            }
-            
-            .table-scroll-wrapper::-webkit-scrollbar {
-                width: 8px;
-                height: 8px;
-            }
-            
-            .table-scroll-wrapper::-webkit-scrollbar-track {
-                background: #f8f9fa;
-                border-radius: 4px;
-            }
-            
-            .table-scroll-wrapper::-webkit-scrollbar-thumb {
-                background: #ced4da;
-                border-radius: 4px;
-            }
-            
-            .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
-                background: #adb5bd;
-            }
-            
-            .table-scroll-wrapper::-webkit-scrollbar-corner {
-                background: #f8f9fa;
-            }
-            
-            /* Headers et footers sticky */
-            .sticky-header th {
-                position: sticky;
-                top: 0;
-                z-index: 10;
-                background: #495057 !important;
-                border-bottom: 2px solid #343a40;
-            }
-            
-            .sticky-footer th {
-                position: sticky;
-                bottom: 0;
-                z-index: 9;
-                background: #f8f9fa !important;
-                border-top: 2px solid #dee2e6;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            }
-            
-            /* ===== LOADING OVERLAY ===== */
-            .dashboard-loading {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(255, 255, 255, 0.95);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10000;
-                backdrop-filter: blur(8px);
-            }
-            
-            .loading-content {
-                text-align: center;
-                padding: 3rem;
-                background: white;
-                border-radius: 20px;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-                border: 1px solid rgba(0,0,0,0.05);
-            }
-            
-            /* ===== METRIC CARDS ===== */
-            .metrics-section .row {
-                margin: 0 -0.75rem;
-            }
-            
-            .metric-card {
-                background: white;
-                border-radius: 15px;
-                box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-                padding: 1.5rem;
-                height: 100%;
-                transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                border: 1px solid rgba(0,0,0,0.05);
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .metric-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, transparent, rgba(0,123,255,0.3), transparent);
-                transform: translateX(-100%);
-                transition: transform 0.6s ease;
-            }
-            
-            .metric-card:hover {
-                transform: translateY(-8px) scale(1.02);
-                box-shadow: 0 15px 40px rgba(0,0,0,0.12);
-            }
-            
-            .metric-card:hover::before {
-                transform: translateX(100%);
-            }
-            
-            .metric-header {
-                display: flex;
-                align-items: center;
-                margin-bottom: 1rem;
-            }
-            
-            .metric-icon {
-                width: 60px;
-                height: 60px;
-                border-radius: 15px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.75rem;
-                margin-right: 1.25rem;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .metric-icon::before {
-                content: '';
-                position: absolute;
-                top: -50%;
-                left: -50%;
-                width: 200%;
-                height: 200%;
-                background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
-                animation: shimmer 3s ease-in-out infinite;
-            }
-            
-            @keyframes shimmer {
-                0%, 100% { transform: rotate(0deg); opacity: 0; }
-                50% { transform: rotate(180deg); opacity: 1; }
-            }
-            
-            .ca-card .metric-icon {
-                background: linear-gradient(135deg, #28a745, #20c997);
-                color: white;
-                box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-            }
-            
-            .projects-card .metric-icon {
-                background: linear-gradient(135deg, #007bff, #6610f2);
-                color: white;
-                box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
-            }
-            
-            .personnel-card .metric-icon {
-                background: linear-gradient(135deg, #17a2b8, #007bff);
-                color: white;
-                box-shadow: 0 4px 15px rgba(23, 162, 184, 0.3);
-            }
-            
-            .margin-card .metric-icon {
-                background: linear-gradient(135deg, #ffc107, #fd7e14);
-                color: white;
-                box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
-            }
-            
-            .metric-title {
-                color: #6c757d;
-                font-size: 0.875rem;
-                font-weight: 600;
-                margin-bottom: 0.5rem;
-                text-transform: uppercase;
-                letter-spacing: 0.8px;
-            }
-            
-            .metric-value {
-                font-size: 2.25rem;
-                font-weight: 800;
-                color: #2d3436;
-                line-height: 1;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            }
-            
-            .metric-footer {
-                margin-top: 1.25rem;
-                padding-top: 1.25rem;
-                border-top: 1px solid rgba(0,0,0,0.06);
-                background: linear-gradient(90deg, transparent, rgba(0,0,0,0.02), transparent);
-            }
-            
-            /* ===== SUMMARY CARDS ===== */
-            .summary-card {
-                background: white;
-                border-radius: 15px;
-                box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-                border: none;
-                height: 100%;
-                overflow: hidden;
-                transition: all 0.3s ease;
-            }
-            
-            .summary-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 15px 35px rgba(0,0,0,0.12);
-            }
-            
-            .summary-card .card-header {
-                background: linear-gradient(135deg, #495057, #6c757d);
-                color: white;
-                border-radius: 15px 15px 0 0;
-                border: none;
-                padding: 1.25rem 1.5rem;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .summary-card .card-header::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-                transition: left 0.5s ease;
-            }
-            
-            .summary-card:hover .card-header::before {
-                left: 100%;
-            }
-            
-            .summary-item {
-                text-align: center;
-                padding: 1.5rem 0;
-                position: relative;
-            }
-            
-            .summary-label {
-                font-size: 0.875rem;
-                color: #6c757d;
-                font-weight: 600;
-                margin-bottom: 0.75rem;
-                text-transform: uppercase;
-                letter-spacing: 0.8px;
-            }
-            
-            .summary-value {
-                font-size: 1.75rem;
-                font-weight: 800;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-                position: relative;
-            }
-            
-            /* ===== GAUGE OPTIMISÉ ===== */
-            .margin-gauge {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 140px;
-                padding: 1rem;
-            }
-            
-            .gauge-container {
-                position: relative;
-                width: 120px;
-                height: 120px;
-            }
-            
-            .circular-progress {
-                width: 120px;
-                height: 120px;
-                border-radius: 50%;
-                background: conic-gradient(
-                    from 0deg,
-                    #28a745 0deg 126deg,
-                    #e9ecef 126deg 360deg
-                );
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                position: relative;
-                animation: rotate 2s ease-out;
-            }
-            
-            @keyframes rotate {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-            }
-            
-            .circular-progress::before {
-                content: '';
-                position: absolute;
-                width: 85px;
-                height: 85px;
-                border-radius: 50%;
-                background: white;
-                box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
-            }
-            
-            .gauge-text {
-                text-align: center;
-                z-index: 2;
-                position: relative;
-            }
-            
-            .gauge-text .percentage {
-                font-size: 1.5rem;
-                font-weight: 800;
-                color: #2d3436;
-                display: block;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            }
-            
-            .gauge-text small {
-                color: #6c757d;
-                font-size: 0.8rem;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            
-            /* ===== PROJECT TABLE OPTIMISÉ ===== */
-            .projects-table-container .card {
-                background: white;
-                border-radius: 15px;
-                box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-                border: none;
-                overflow: hidden;
-            }
-            
-            .projects-table-container .card-header {
-                background: linear-gradient(135deg, #343a40, #495057);
-                color: white;
-                border-radius: 15px 15px 0 0;
-                border: none;
-                padding: 1.25rem 1.5rem;
-                position: relative;
-                z-index: 5;
-            }
-            
-            .projects-table {
-                margin-bottom: 0;
-                font-size: 0.9rem;
-            }
-            
-            .projects-table thead th {
-                background: #495057 !important;
-                color: white;
-                border: none;
-                font-weight: 600;
-                font-size: 0.875rem;
-                padding: 1rem 0.75rem;
-                white-space: nowrap;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-            }
-            
-            .projects-table tbody tr {
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                border-bottom: 1px solid rgba(0,0,0,0.05);
-            }
-            
-            .projects-table tbody tr:hover {
-                background: linear-gradient(90deg, rgba(0,123,255,0.05), rgba(0,123,255,0.02), rgba(0,123,255,0.05));
-                transform: translateX(5px);
-                box-shadow: 5px 0 15px rgba(0,123,255,0.1);
-                border-left: 4px solid #007bff;
-            }
-            
-            .projects-table td {
-                padding: 1rem 0.75rem;
-                vertical-align: middle;
-                border-color: rgba(0,0,0,0.05);
-                transition: all 0.3s ease;
-            }
-            
-            .project-info {
-                display: flex;
-                flex-direction: column;
-                gap: 0.25rem;
-            }
-            
-            .project-title {
-                font-weight: 600;
-                color: #2d3436;
-                max-width: 200px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                transition: color 0.3s ease;
-            }
-            
-            .project-row:hover .project-title {
-                color: #007bff;
-            }
-            
-            .project-id {
-                font-size: 0.75rem;
-                color: #6c757d;
-                font-weight: 500;
-            }
-            
-            .amount-value {
-                font-weight: 700;
-                color: #28a745;
-                font-size: 0.95rem;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            }
-            
-            .hours-value {
-                color: #495057;
-                font-weight: 600;
-            }
-            
-            /* ===== BADGES AMÉLIORÉS ===== */
-            .badge {
-                font-weight: 600;
-                letter-spacing: 0.3px;
-                border-radius: 8px;
-                transition: all 0.3s ease;
-            }
-            
-            .badge:hover {
-                transform: scale(1.1);
-            }
-            
-            .badge.bg-info {
-                background: linear-gradient(135deg, #17a2b8, #138496) !important;
-                color: white !important;
-                box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
-            }
-            
-            .badge.bg-success {
-                background: linear-gradient(135deg, #28a745, #20c997) !important;
-                color: white;
-                box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
-            }
-            
-            .badge.bg-warning {
-                background: linear-gradient(135deg, #ffc107, #fd7e14) !important;
-                color: #2d3436;
-                box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
-            }
-            
-            .badge.bg-danger {
-                background: linear-gradient(135deg, #dc3545, #c82333) !important;
-                color: white;
-                box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
-            }
-            
-            .badge.bg-secondary {
-                background: linear-gradient(135deg, #6c757d, #495057) !important;
-                color: white;
-                box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
-            }
-            
-            .badge.bg-outline-secondary {
-                background: transparent;
-                border: 2px solid #6c757d;
-                color: #6c757d;
-                font-weight: 600;
-                transition: all 0.3s ease;
-            }
-            
-            .badge.bg-outline-secondary:hover {
-                background: #6c757d;
-                color: white;
-                transform: scale(1.05);
-            }
-            
-            .badge.bg-primary {
-                background: linear-gradient(135deg, #007bff, #0056b3) !important;
-                color: white;
-                box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
-            }
-            
-            /* ===== EMPTY STATE AMÉLIORÉ ===== */
-            .empty-state {
-                text-align: center;
-                padding: 4rem 2rem;
-                background: linear-gradient(135deg, rgba(248,249,250,0.8), rgba(233,236,239,0.8));
-                border-radius: 15px;
-                margin: 2rem;
-            }
-            
-            .empty-state i {
-                opacity: 0.6;
-                margin-bottom: 2rem;
-                color: #6c757d;
-            }
-            
-            .empty-state h5 {
-                font-weight: 600;
-                margin-bottom: 1rem;
-            }
-            
-            .empty-state p {
-                max-width: 400px;
-                margin: 0 auto 2rem;
-                line-height: 1.6;
-            }
-            
-            /* ===== SYSTEM STATUS ===== */
-            .system-status {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-end;
-                gap: 0.25rem;
-            }
-            
-            .system-status .d-block.text-success,
-            .system-status .d-block.healthy {
-                color: #28a745 !important;
-                font-weight: 600;
-            }
-            
-            .system-status .d-block.text-warning,
-            .system-status .d-block.warning {
-                color: #ffc107 !important;
-                font-weight: 600;
-            }
-            
-            .system-status .d-block.text-danger,
-            .system-status .d-block.danger {
-                color: #dc3545 !important;
-                font-weight: 600;
-            }
-            
-            /* ===== UTILITIES ===== */
-            .sortable {
-                cursor: pointer;
-                user-select: none;
-                transition: background-color 0.2s ease;
-            }
-            
-            .sortable:hover {
-                background: rgba(255,255,255,0.15) !important;
-            }
-            
-            .sortable:active {
-                background: rgba(255,255,255,0.25) !important;
-            }
-            
-            /* ===== FORM CONTROLS AMÉLIORÉS ===== */
-            .form-control-sm {
-                border-radius: 8px;
-                border: 2px solid #e9ecef;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                font-weight: 500;
-            }
-            
-            .form-control-sm:focus {
-                border-color: #007bff;
-                box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
-                transform: translateY(-2px);
-                background: rgba(0, 123, 255, 0.02);
-            }
-            
-            /* ===== BOUTONS AMÉLIORÉS ===== */
-            .btn {
-                border-radius: 8px;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                font-weight: 600;
-                letter-spacing: 0.3px;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .btn::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-                transition: left 0.5s ease;
-            }
-            
-            .btn:hover::before {
-                left: 100%;
-            }
-            
-            .btn:hover {
-                transform: translateY(-3px);
-                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-            }
-            
-            .btn:active {
-                transform: translateY(-1px);
-            }
-            
-            .btn-primary {
-                background: linear-gradient(135deg, #007bff, #0056b3);
-                border: none;
-                box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
-            }
-            
-            .btn-primary:hover {
-                background: linear-gradient(135deg, #0056b3, #004085);
-                box-shadow: 0 8px 25px rgba(0, 123, 255, 0.4);
-            }
-            
-            .btn-outline-secondary {
-                border: 2px solid #6c757d;
-                color: #6c757d;
-                background: transparent;
-                font-weight: 600;
-            }
-            
-            .btn-outline-secondary:hover {
-                background: #6c757d;
-                color: white;
-                border-color: #6c757d;
-            }
-            
-            .btn-outline-primary {
-                border: 2px solid #007bff;
-                color: #007bff;
-                background: transparent;
-                font-weight: 600;
-            }
-            
-            .btn-outline-primary:hover {
-                background: linear-gradient(135deg, #007bff, #0056b3);
-                color: white;
-                border-color: transparent;
-            }
-            
-            .btn-sm {
-                padding: 0.4rem 1rem;
-                font-size: 0.875rem;
-            }
-            
-            /* ===== PROGRESS BAR ===== */
-            .progress {
-                border-radius: 10px;
-                overflow: hidden;
-                height: 10px;
-                background: #e9ecef;
-                box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
-            }
-            
-            .progress-bar {
-                border-radius: 10px;
-                background: linear-gradient(90deg, #007bff, #0056b3);
-                transition: width 0.6s ease;
-            }
-            
-            .progress-bar-animated {
-                animation: progress-bar-stripes 1s linear infinite;
-            }
-            
-            @keyframes progress-bar-stripes {
-                0% { background-position: 40px 0; }
-                100% { background-position: 0 0; }
-            }
-            
-            /* ===== ALERT STYLES ===== */
-            .alert {
-                border-radius: 12px;
-                border: none;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                margin-bottom: 0.75rem;
-                font-weight: 500;
-                backdrop-filter: blur(10px);
-            }
-            
-            .alert-danger {
-                background: linear-gradient(135deg, rgba(220,53,69,0.15), rgba(200,35,51,0.1));
-                color: #721c24;
-                border-left: 4px solid #dc3545;
-            }
-            
-            .alert-warning {
-                background: linear-gradient(135deg, rgba(255,193,7,0.15), rgba(253,126,20,0.1));
-                color: #856404;
-                border-left: 4px solid #ffc107;
-            }
-            
-            /* ===== RESPONSIVE DESIGN OPTIMISÉ ===== */
-            @media (max-width: 1200px) {
-                .dashboard-content {
-                    padding: 1.5rem;
-                }
-                
-                .table-scroll-wrapper {
-                    max-height: 50vh;
-                }
-                
-                .metric-value {
-                    font-size: 2rem;
-                }
-            }
-            
-            @media (max-width: 768px) {
-                .dashboard-header {
-                    padding: 1rem;
-                }
-                
-                .dashboard-content {
-                    padding: 1rem;
-                }
-                
-                .dashboard-section {
-                    margin-bottom: 1.5rem;
-                }
-                
-                .metric-value {
-                    font-size: 1.75rem;
-                }
-                
-                .metric-header {
-                    flex-direction: column;
-                    text-align: center;
-                    gap: 1rem;
-                }
-                
-                .metric-icon {
-                    margin-right: 0;
-                }
-                
-                .table-scroll-wrapper {
-                    max-height: 40vh;
-                }
-                
-                .project-title {
-                    max-width: 120px;
-                }
-                
-                .dashboard-footer {
-                    text-align: center;
-                    padding: 0.75rem 1rem;
-                }
-                
-                .dashboard-footer .text-end {
-                    text-align: center !important;
-                    margin-top: 0.5rem;
-                }
-                
-                .dashboard-controls .row > div {
-                    margin-bottom: 1rem;
-                }
-            }
-
-            @media (max-width: 576px) {
-                .dashboard-header {
-                    padding: 0.75rem;
-                }
-                
-                .dashboard-content {
-                    padding: 0.75rem;
-                }
-                
-                .metric-card {
-                    padding: 1rem;
-                }
-                
-                .metric-value {
-                    font-size: 1.5rem;
-                }
-                
-                .summary-item {
-                    margin-bottom: 1rem;
-                    padding: 1rem 0;
-                }
-                
-                .projects-table td, 
-                .projects-table th {
-                    padding: 0.5rem 0.25rem;
-                    font-size: 0.8rem;
-                }
-                
-                .btn-group .btn {
-                    font-size: 0.75rem;
-                    padding: 0.25rem 0.5rem;
-                }
-                
-                .table-scroll-wrapper {
-                    max-height: 35vh;
-                }
-                
-                .empty-state {
-                    padding: 2rem 1rem;
-                }
-                
-                .gauge-container {
-                    width: 100px;
-                    height: 100px;
-                }
-                
-                .circular-progress {
-                    width: 100px;
-                    height: 100px;
-                }
-                
-                .circular-progress::before {
-                    width: 70px;
-                    height: 70px;
-                }
-            }
-
-            /* ===== ANIMATIONS AVANCÉES ===== */
-            @keyframes fadeInUp {
-                from {
-                    opacity: 0;
-                    transform: translateY(30px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-            
-            @keyframes slideInRight {
-                from {
-                    opacity: 0;
-                    transform: translateX(-30px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateX(0);
-                }
-            }
-            
-            .metric-card {
-                animation: fadeInUp 0.6s ease-out;
-                animation-fill-mode: both;
-            }
-            
-            .metric-card:nth-child(1) { animation-delay: 0.1s; }
-            .metric-card:nth-child(2) { animation-delay: 0.2s; }
-            .metric-card:nth-child(3) { animation-delay: 0.3s; }
-            .metric-card:nth-child(4) { animation-delay: 0.4s; }
-            
-            .project-row {
-                animation: slideInRight 0.4s ease-out;
-                animation-fill-mode: both;
-            }
-            
-            .summary-card {
-                animation: fadeInUp 0.6s ease-out;
-                animation-delay: 0.2s;
-                animation-fill-mode: both;
-            }
-            
-            .projects-table-container {
-                animation: fadeInUp 0.6s ease-out;
-                animation-delay: 0.4s;
-                animation-fill-mode: both;
-            }
-            
-            /* ===== SMOOTH SCROLLING ===== */
-            .dashboard-scroll-container {
-                scroll-behavior: smooth;
-            }
-            
-            /* ===== FOCUS STATES ===== */
-            .btn:focus,
-            .form-control:focus {
-                outline: none;
-                box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
-            }
-            
-            .sortable:focus {
-                outline: 2px solid rgba(255, 255, 255, 0.5);
-                outline-offset: 2px;
-            }
-            
-            /* ===== HIGH CONTRAST MODE ===== */
-            @media (prefers-contrast: high) {
-                .metric-card,
-                .summary-card,
-                .projects-table-container .card {
-                    border: 2px solid #000;
-                }
-                
-                .badge {
-                    border: 1px solid currentColor;
-                }
-            }
-            
-            /* ===== REDUCED MOTION ===== */
-            @media (prefers-reduced-motion: reduce) {
-                *,
-                *::before,
-                *::after {
-                    animation-duration: 0.01ms !important;
-                    animation-iteration-count: 1 !important;
-                    transition-duration: 0.01ms !important;
-                    scroll-behavior: auto !important;
-                }
-            }
-            
-            /* ===== PRINT STYLES OPTIMISÉS ===== */
-            @media print {
-                .dashboard-header, 
-                .dashboard-footer, 
-                .table-actions,
-                .btn,
-                .dashboard-alerts {
-                    display: none !important;
-                }
-                
-                .dashboard-container {
-                    height: auto !important;
-                    background: white !important;
-                }
-                
-                .dashboard-scroll-container {
-                    overflow: visible !important;
-                    height: auto !important;
-                }
-                
-                .metric-card, 
-                .summary-card,
-                .projects-table-container .card {
-                    box-shadow: none !important;
-                    border: 1px solid #dee2e6 !important;
-                    break-inside: avoid;
-                }
-                
-                .dashboard-content {
-                    padding: 0 !important;
-                    overflow: visible !important;
-                }
-                
-                .table-scroll-wrapper {
-                    max-height: none !important;
-                    overflow: visible !important;
-                }
-                
-                .projects-table {
-                    font-size: 0.8rem;
-                }
-                
-                .metric-value {
-                    font-size: 1.5rem !important;
-                }
-                
-                .page-break {
-                    page-break-before: always;
-                }
-            }
-        </style>
     </t>
 </templates>

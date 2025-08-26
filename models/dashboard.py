@@ -1,14 +1,15 @@
-# models/dashboard.py - CORRECTIONS pour le calcul des marges
+# models/dashboard.py
 from odoo import models, fields, api
 from datetime import datetime, timedelta
 from odoo.exceptions import ValidationError
 import logging
+import json
 
 _logger = logging.getLogger(__name__)
 
 class DashboardProjet(models.Model):
     _name = 'dashboard.projet'
-    _description = 'Tableau de Bord Projet'
+    _description = 'Tableau de Bord Projet Amélioré'
     
     name = fields.Char('Nom', default='Tableau de Bord')
     date_debut = fields.Date('Date de début', default=fields.Date.today)
@@ -33,7 +34,177 @@ class DashboardProjet(models.Model):
                         domain.append(('invoice_date', '>=', date_debut))
                 
                 if date_fin:
-                    date_fin = self._parse_date(date_fin)
+                    date_debut = self._parse_date(date_debut)
+            date_fin = self._parse_date(date_fin)
+            
+            if not date_debut or not date_fin:
+                return []
+            
+            # Génération de données par mois entre les deux dates
+            evolution_data = []
+            current_date = date_debut
+            
+            while current_date <= date_fin:
+                # Calcul du CA pour le mois en cours
+                month_start = current_date.replace(day=1)
+                if current_date.month == 12:
+                    month_end = month_start.replace(year=current_date.year + 1, month=1, day=1) - timedelta(days=1)
+                else:
+                    month_end = month_start.replace(month=current_date.month + 1, day=1) - timedelta(days=1)
+                
+                month_ca = self.get_chiffre_affaires(month_start, month_end)
+                
+                evolution_data.append({
+                    'periode': current_date.strftime('%Y-%m'),
+                    'ca_realise': month_ca,
+                    'ca_prevu': month_ca * (0.9 + (hash(str(current_date)) % 20) / 100)  # Simulation CA prévu
+                })
+                
+                # Passage au mois suivant
+                if current_date.month == 12:
+                    current_date = current_date.replace(year=current_date.year + 1, month=1)
+                else:
+                    current_date = current_date.replace(month=current_date.month + 1)
+            
+            return evolution_data
+            
+        except Exception as e:
+            _logger.warning(f"Erreur génération évolution CA: {str(e)}")
+            return []
+
+    # Méthodes utilitaires
+    def _model_exists(self, model_name):
+        """Vérifie si un modèle existe"""
+        try:
+            return model_name in self.env
+        except:
+            return False
+
+    def _field_exists(self, model_name, field_name):
+        """Vérifie si un champ existe dans un modèle"""
+        try:
+            return (self._model_exists(model_name) and 
+                    field_name in self.env[model_name]._fields)
+        except:
+            return False
+
+    def _parse_date(self, date_input):
+        """Parse une date depuis string ou objet date"""
+        if not date_input:
+            return None
+        
+        try:
+            if isinstance(date_input, str):
+                return fields.Date.from_string(date_input)
+            return date_input
+        except:
+            return None
+
+    def _get_empty_marge(self):
+        """Retourne une structure de marge vide"""
+        return {
+            'revenus': 0,
+            'cout_salarial': 0,
+            'marge': 0,
+            'taux_marge': 0
+        }
+
+    @api.model
+    def generate_sample_data(self, nb_projets=10):
+        """Génère des données d'exemple pour les tests"""
+        try:
+            sample_projets = []
+            
+            for i in range(1, nb_projets + 1):
+                # Simulation de données réalistes
+                ca_base = 50000 + (i * 10000)
+                heures_base = 200 + (i * 50)
+                
+                sample_projets.append({
+                    'id': i,
+                    'name': f'Projet Test {i:02d}',
+                    'ca': ca_base + (hash(f'ca_{i}') % 20000),
+                    'nb_personnes': 2 + (i % 3),
+                    'heures': heures_base + (hash(f'heures_{i}') % 100),
+                    'stage': ['En cours', 'Planifié', 'Terminé', 'En attente'][i % 4],
+                    'budget_prevu': ca_base * 1.2,
+                    'budget_consomme': ca_base * (0.8 + ((i % 10) / 20)),
+                    'marge_data': {
+                        'revenus': ca_base,
+                        'cout_salarial': ca_base * 0.6,
+                        'marge': ca_base * 0.4,
+                        'taux_marge': 40.0 - (i % 20)
+                    }
+                })
+            
+            return {
+                'chiffre_affaires': sum(p['ca'] for p in sample_projets),
+                'projets': sample_projets,
+                'marge_administrative': {
+                    'ca_total': sum(p['ca'] for p in sample_projets),
+                    'cout_admin': sum(p['ca'] for p in sample_projets) * 0.15,
+                    'marge_admin': sum(p['ca'] for p in sample_projets) * 0.25,
+                    'taux_marge_admin': 25.0
+                },
+                'budget_comparison': {
+                    'budget_total': sum(p['budget_prevu'] for p in sample_projets),
+                    'budget_consomme': sum(p['budget_consomme'] for p in sample_projets),
+                    'ecart_budget': 5.0
+                }
+            }
+            
+        except Exception as e:
+            _logger.error(f"Erreur génération données test: {str(e)}")
+            return self.get_dashboard_data()
+
+# Modèle de configuration pour le dashboard
+class DashboardConfiguration(models.Model):
+    _name = 'dashboard.projet.config'
+    _description = 'Configuration Dashboard Projet'
+    
+    name = fields.Char('Nom Configuration', required=True)
+    user_id = fields.Many2one('res.users', 'Utilisateur', default=lambda self: self.env.user)
+    
+    # Paramètres d'affichage
+    show_charts = fields.Boolean('Afficher Graphiques', default=True)
+    show_budget = fields.Boolean('Afficher Budget', default=True)
+    auto_refresh = fields.Integer('Auto-actualisation (minutes)', default=5)
+    
+    # Filtres par défaut
+    default_period_days = fields.Integer('Période par défaut (jours)', default=30)
+    
+    # Paramètres d'export
+    export_include_charts = fields.Boolean('Inclure graphiques dans export', default=False)
+    export_include_details = fields.Boolean('Inclure détails dans export', default=True)
+    
+    # Seuils d'alerte
+    marge_alert_min = fields.Float('Seuil alerte marge minimum (%)', default=10.0)
+    budget_alert_max = fields.Float('Seuil alerte dépassement budget (%)', default=90.0)
+    
+    @api.model
+    def get_user_config(self):
+        """Récupère la configuration de l'utilisateur courant"""
+        config = self.search([('user_id', '=', self.env.user.id)], limit=1)
+        if not config:
+            # Création d'une configuration par défaut
+            config = self.create({
+                'name': f'Config {self.env.user.name}',
+                'user_id': self.env.user.id
+            })
+        return config
+    
+    def get_config_dict(self):
+        """Retourne la configuration sous forme de dictionnaire"""
+        return {
+            'show_charts': self.show_charts,
+            'show_budget': self.show_budget,
+            'auto_refresh': self.auto_refresh,
+            'default_period_days': self.default_period_days,
+            'export_include_charts': self.export_include_charts,
+            'export_include_details': self.export_include_details,
+            'marge_alert_min': self.marge_alert_min,
+            'budget_alert_max': self.budget_alert_max
+        }date_fin)
                     if date_fin:
                         domain.append(('invoice_date', '<=', date_fin))
                 
@@ -42,17 +213,17 @@ class DashboardProjet(models.Model):
                                 if facture.amount_total_signed and facture.amount_total_signed > 0)
                 total_ca = max(total_ca, ca_factures)
             
-            # # Méthode 2: Via les commandes de vente confirmées (fallback)
-            # if total_ca == 0 and self._model_exists('sale.order'):
-            #     domain = [('state', 'in', ['sale', 'done'])]
+            # Méthode 2: Via les commandes de vente confirmées (fallback)
+            if total_ca == 0 and self._model_exists('sale.order'):
+                domain = [('state', 'in', ['sale', 'done'])]
                 
-            #     if date_debut and self._field_exists('sale.order', 'date_order'):
-            #         domain.append(('date_order', '>=', date_debut))
-            #     if date_fin and self._field_exists('sale.order', 'date_order'):
-            #         domain.append(('date_order', '<=', date_fin))
+                if date_debut and self._field_exists('sale.order', 'date_order'):
+                    domain.append(('date_order', '>=', date_debut))
+                if date_fin and self._field_exists('sale.order', 'date_order'):
+                    domain.append(('date_order', '<=', date_fin))
                 
-            #     commandes = self.env['sale.order'].search(domain)
-            #     total_ca = sum(cmd.amount_total for cmd in commandes if cmd.amount_total)
+                commandes = self.env['sale.order'].search(domain)
+                total_ca = sum(cmd.amount_total for cmd in commandes if cmd.amount_total)
             
             _logger.info(f"CA calculé: {total_ca} pour la période {date_debut} à {date_fin}")
             return total_ca
@@ -63,7 +234,7 @@ class DashboardProjet(models.Model):
 
     @api.model
     def get_projets_data(self, date_debut=None, date_fin=None):
-        """Récupération des données des projets avec calculs optimisés"""
+        """Récupération des données des projets avec calculs optimisés et budget"""
         try:
             if not self._model_exists('project.project'):
                 _logger.warning("Modèle project.project non disponible")
@@ -90,6 +261,9 @@ class DashboardProjet(models.Model):
             
             for projet in projets:
                 try:
+                    # Données budget
+                    budget_data = self._get_budget_projet(projet, date_debut, date_fin)
+                    
                     projet_info = {
                         'id': projet.id,
                         'name': projet.name or f'Projet {projet.id}',
@@ -97,6 +271,9 @@ class DashboardProjet(models.Model):
                         'nb_personnes': self._get_nb_personnes_projet(projet),
                         'heures': self._get_heures_projet(projet, date_debut, date_fin),
                         'stage': self._get_stage_projet(projet),
+                        'budget_prevu': budget_data.get('budget_prevu', 0),
+                        'budget_consomme': budget_data.get('budget_consomme', 0),
+                        'ecart_budget': budget_data.get('ecart_budget', 0),
                         'marge_data': None  # Sera calculé séparément
                     }
                     
@@ -111,6 +288,9 @@ class DashboardProjet(models.Model):
                         'nb_personnes': 0,
                         'heures': 0,
                         'stage': 'Erreur',
+                        'budget_prevu': 0,
+                        'budget_consomme': 0,
+                        'ecart_budget': 0,
                         'marge_data': None
                     })
             
@@ -120,8 +300,60 @@ class DashboardProjet(models.Model):
             _logger.error(f"Erreur critique dans get_projets_data: {str(e)}")
             return []
 
+    def _get_budget_projet(self, projet, date_debut=None, date_fin=None):
+        """Calcul des données budgétaires d'un projet"""
+        try:
+            budget_prevu = 0
+            budget_consomme = 0
+            
+            # Méthode 1: Via les budgets analytiques (si disponible)
+            if (self._model_exists('crossovered.budget') and 
+                hasattr(projet, 'analytic_account_id') and 
+                projet.analytic_account_id):
+                
+                # Recherche des lignes budgétaires
+                domain = [('analytic_account_id', '=', projet.analytic_account_id.id)]
+                
+                if date_debut:
+                    domain.append(('date_from', '>=', date_debut))
+                if date_fin:
+                    domain.append(('date_to', '<=', date_fin))
+                
+                if self._model_exists('crossovered.budget.lines'):
+                    budget_lines = self.env['crossovered.budget.lines'].search(domain)
+                    budget_prevu = sum(line.planned_amount for line in budget_lines if line.planned_amount)
+                    budget_consomme = sum(line.practical_amount for line in budget_lines if line.practical_amount)
+            
+            # Méthode 2: Calcul basé sur les données projet (fallback)
+            if budget_prevu == 0:
+                # Estimation basée sur le CA et un ratio
+                ca_projet = self._get_ca_projet_optimized(projet, date_debut, date_fin)
+                budget_prevu = ca_projet * 1.2  # Estimation: budget = CA + 20%
+                
+                # Budget consommé = coûts réels
+                budget_consomme = self._get_cout_salarial_projet(projet, date_debut, date_fin)
+            
+            # Calcul de l'écart
+            ecart_budget = 0
+            if budget_prevu > 0:
+                ecart_budget = ((budget_consomme / budget_prevu) - 1) * 100
+            
+            return {
+                'budget_prevu': budget_prevu,
+                'budget_consomme': budget_consomme,
+                'ecart_budget': ecart_budget
+            }
+            
+        except Exception as e:
+            _logger.warning(f"Erreur calcul budget projet {projet.id}: {str(e)}")
+            return {
+                'budget_prevu': 0,
+                'budget_consomme': 0,
+                'ecart_budget': 0
+            }
+
     def _get_ca_projet_optimized(self, projet, date_debut=None, date_fin=None):
-        """Calcul optimisé du CA d'un projet - VERSION CORRIGÉE"""
+        """Calcul optimisé du CA d'un projet"""
         try:
             ca = 0
             
@@ -137,72 +369,37 @@ class DashboardProjet(models.Model):
                 
                 # Recherche par distribution analytique (Odoo 16+)
                 if self._field_exists('account.move.line', 'analytic_distribution'):
-                    # Vérifier si le compte analytique est dans la distribution
-                    analytic_lines = self.env['account.move.line'].search([
-                        ('move_id.state', '=', 'posted'),
-                        ('move_id.move_type', '=', 'out_invoice'),
-                        ('analytic_distribution', '!=', False)
-                    ])
-                    
-                    if date_debut:
-                        analytic_lines = analytic_lines.filtered(lambda l: l.move_id.invoice_date >= date_debut)
-                    if date_fin:
-                        analytic_lines = analytic_lines.filtered(lambda l: l.move_id.invoice_date <= date_fin)
-                    
-                    for ligne in analytic_lines:
-                        if ligne.analytic_distribution:
-                            # analytic_distribution est un dictionnaire JSON
-                            if str(projet.analytic_account_id.id) in str(ligne.analytic_distribution):
-                                ca += ligne.price_subtotal or 0
-                                
+                    domain.append(('analytic_distribution', 'like', f'%{projet.analytic_account_id.id}%'))
                 # Fallback pour versions antérieures
                 elif self._field_exists('account.move.line', 'analytic_account_id'):
                     domain.append(('analytic_account_id', '=', projet.analytic_account_id.id))
-                    
-                    if date_debut:
-                        domain.append(('move_id.invoice_date', '>=', date_debut))
-                    if date_fin:
-                        domain.append(('move_id.invoice_date', '<=', date_fin))
-                    
-                    lignes = self.env['account.move.line'].search(domain)
-                    ca = sum(ligne.price_subtotal for ligne in lignes if ligne.price_subtotal)
+                
+                if date_debut:
+                    domain.append(('move_id.invoice_date', '>=', date_debut))
+                if date_fin:
+                    domain.append(('move_id.invoice_date', '<=', date_fin))
+                
+                lignes = self.env['account.move.line'].search(domain)
+                ca = sum(ligne.price_subtotal for ligne in lignes if ligne.price_subtotal)
             
-            # # Méthode 2: Via les commandes de vente liées au projet
-            # if ca == 0 and self._model_exists('sale.order'):
-            #     domain = [('state', 'in', ['sale', 'done'])]
+            # Méthode 2: Via les commandes de vente liées au projet
+            if ca == 0 and self._model_exists('sale.order'):
+                domain = [('state', 'in', ['sale', 'done'])]
                 
-            #     # Recherche directe par project_id
-            #     if self._field_exists('sale.order', 'project_id'):
-            #         domain.append(('project_id', '=', projet.id))
-            #     # Ou par compte analytique
-            #     elif (self._field_exists('sale.order', 'analytic_account_id') and 
-            #           hasattr(projet, 'analytic_account_id') and projet.analytic_account_id):
-            #         domain.append(('analytic_account_id', '=', projet.analytic_account_id.id))
+                if self._field_exists('sale.order', 'project_id'):
+                    domain.append(('project_id', '=', projet.id))
+                elif (self._field_exists('sale.order', 'analytic_account_id') and 
+                      hasattr(projet, 'analytic_account_id') and projet.analytic_account_id):
+                    domain.append(('analytic_account_id', '=', projet.analytic_account_id.id))
                 
-            #     if date_debut and self._field_exists('sale.order', 'date_order'):
-            #         domain.append(('date_order', '>=', date_debut))
-            #     if date_fin and self._field_exists('sale.order', 'date_order'):
-            #         domain.append(('date_order', '<=', date_fin))
+                if date_debut and self._field_exists('sale.order', 'date_order'):
+                    domain.append(('date_order', '>=', date_debut))
+                if date_fin and self._field_exists('sale.order', 'date_order'):
+                    domain.append(('date_order', '<=', date_fin))
                 
-            #     commandes = self.env['sale.order'].search(domain)
-            #     ca = sum(cmd.amount_total for cmd in commandes if cmd.amount_total)
+                commandes = self.env['sale.order'].search(domain)
+                ca = sum(cmd.amount_total for cmd in commandes if cmd.amount_total)
             
-            # # Méthode 3: Via les timesheets valorisés (si pas de données factures/commandes)
-            # if ca == 0 and self._model_exists('account.analytic.line'):
-            #     timesheet_domain = [
-            #         ('project_id', '=', projet.id),
-            #         ('amount', '>', 0)  # Revenus (montants positifs)
-            #     ]
-                
-            #     if date_debut:
-            #         timesheet_domain.append(('date', '>=', date_debut))
-            #     if date_fin:
-            #         timesheet_domain.append(('date', '<=', date_fin))
-                
-            #     timesheets_revenus = self.env['account.analytic.line'].search(timesheet_domain)
-            #     ca = sum(abs(ts.amount) for ts in timesheets_revenus if ts.amount)
-            
-            _logger.debug(f"CA calculé pour projet {projet.id}: {ca}")
             return ca
             
         except Exception as e:
@@ -212,13 +409,13 @@ class DashboardProjet(models.Model):
     def _get_nb_personnes_projet(self, projet):
         """Calcul du nombre de personnes affectées au projet"""
         try:
-            # # Méthode 1: Via user_ids (responsables/membres)
-            # if hasattr(projet, 'user_ids') and projet.user_ids:
-            #     return len(projet.user_ids)
+            # Méthode 1: Via user_ids (responsables/membres)
+            if hasattr(projet, 'user_ids') and projet.user_ids:
+                return len(projet.user_ids)
             
-            # # Méthode 2: Via user_id (responsable unique)
-            # if hasattr(projet, 'user_id') and projet.user_id:
-            #     return 1
+            # Méthode 2: Via user_id (responsable unique)
+            if hasattr(projet, 'user_id') and projet.user_id:
+                return 1
             
             # Méthode 3: Via les timesheets (personnes ayant travaillé)
             if self._model_exists('account.analytic.line'):
@@ -257,46 +454,34 @@ class DashboardProjet(models.Model):
     def _get_stage_projet(self, projet):
         """Récupération du statut/étape du projet"""
         try:
-            # if hasattr(projet, 'stage_id') and projet.stage_id:
-            #     return projet.stage_id.name
-            # elif hasattr(projet, 'state'):
-            #     state_mapping = {
-            #         'template': 'Modèle',
-            #         'draft': 'Brouillon', 
-            #         'open': 'En cours',
-            #         'pending': 'En attente',
-            #         'close': 'Fermé',
-            #         'cancelled': 'Annulé'
-            #     }
-            #     return state_mapping.get(projet.state, str(projet.state))
-            # elif hasattr(projet, 'last_update_status'):
-            if hasattr(projet, 'last_update_status'):
-                last_update_status_mapping = {
-                    'on_track': 'En bonne voie',
-                    'at_risk': 'En danger', 
-                    'off_track': 'En retard',
-                    'on_hold': 'En attente',
-                    'done': 'Fait',
-                    'to_define': 'À définir'
+            if hasattr(projet, 'stage_id') and projet.stage_id:
+                return projet.stage_id.name
+            elif hasattr(projet, 'state'):
+                state_mapping = {
+                    'template': 'Modèle',
+                    'draft': 'Brouillon', 
+                    'open': 'En cours',
+                    'pending': 'En attente',
+                    'close': 'Fermé',
+                    'cancelled': 'Annulé'
                 }
-                return last_update_status_mapping.get(projet.last_update_status, str(projet.last_update_status))
-
+                return state_mapping.get(projet.state, str(projet.state))
+            
             return 'Actif'
             
         except Exception as e:
             _logger.warning(f"Erreur récupération statut projet {projet.id}: {str(e)}")
-            return 'Bizarre'
+            return 'Indéterminé'
 
     @api.model
     def get_marge_salariale_projet(self, projet_id, date_debut=None, date_fin=None):
-        """Calcul de la marge salariale par projet - VERSION CORRIGÉE"""
+        """Calcul de la marge salariale par projet"""
         try:
             if not projet_id:
                 return self._get_empty_marge()
             
             projet = self.env['project.project'].browse(projet_id)
             if not projet.exists():
-                _logger.warning(f"Projet {projet_id} non trouvé")
                 return self._get_empty_marge()
             
             date_debut = self._parse_date(date_debut)
@@ -313,13 +498,13 @@ class DashboardProjet(models.Model):
             taux_marge = (marge / revenus * 100) if revenus > 0 else 0
             
             result = {
-                'revenus': float(revenus),
-                'cout_salarial': float(cout_salarial),
-                'marge': float(marge),
-                'taux_marge': round(float(taux_marge), 2)
+                'revenus': revenus,
+                'cout_salarial': cout_salarial,
+                'marge': marge,
+                'taux_marge': taux_marge
             }
             
-            _logger.info(f"Marge calculée pour projet {projet_id} ({projet.name}): {result}")
+            _logger.info(f"Marge calculée pour projet {projet_id}: {result}")
             return result
             
         except Exception as e:
@@ -327,7 +512,7 @@ class DashboardProjet(models.Model):
             return self._get_empty_marge()
 
     def _get_cout_salarial_projet(self, projet, date_debut=None, date_fin=None):
-        """Calcul des coûts salariaux d'un projet - VERSION COMPLÈTEMENT CORRIGÉE"""
+        """Calcul des coûts salariaux d'un projet"""
         try:
             if not self._model_exists('account.analytic.line'):
                 return 0
@@ -340,88 +525,21 @@ class DashboardProjet(models.Model):
                 domain.append(('date', '<=', date_fin))
             
             timesheets = self.env['account.analytic.line'].search(domain)
+            
+            # Les montants dans account.analytic.line sont généralement négatifs pour les coûts
             cout_total = 0
-            
-            _logger.debug(f"Analyse {len(timesheets)} timesheets pour projet {projet.id}")
-            
             for ts in timesheets:
-                cout_ligne = 0
-                
-                # Méthode 1: Utiliser le montant négatif des timesheets (coûts)
-                if hasattr(ts, 'amount') and ts.amount is not None:
-                    if ts.amount < 0:
-                        # Les coûts sont négatifs, on prend la valeur absolue
-                        cout_ligne = abs(ts.amount)
-                        _logger.debug(f"Coût direct timesheet {ts.id}: {cout_ligne}")
-                
-                # # Méthode 2: Calcul basé sur le temps et le coût horaire employé
-                # if cout_ligne == 0 and hasattr(ts, 'unit_amount') and ts.unit_amount:
-                #     cout_horaire = 0
-                    
-                #     # Essayer de récupérer le coût horaire de l'employé
-                #     if (hasattr(ts, 'employee_id') and ts.employee_id and
-                #         hasattr(ts.employee_id, 'hourly_cost') and ts.employee_id.hourly_cost):
-                #         cout_horaire = ts.employee_id.hourly_cost
-                #         _logger.debug(f"Coût horaire employé {ts.employee_id.name}: {cout_horaire}")
-                    
-                #     # Ou via le coût du produit/service associé
-                #     elif (hasattr(ts, 'product_id') and ts.product_id and
-                #           hasattr(ts.product_id, 'standard_price') and ts.product_id.standard_price):
-                #         cout_horaire = ts.product_id.standard_price
-                #         _logger.debug(f"Coût produit {ts.product_id.name}: {cout_horaire}")
-                    
-                #     # Ou via le user si pas d'employé
-                #     elif (hasattr(ts, 'user_id') and ts.user_id and 
-                #           hasattr(ts.user_id, 'employee_id') and ts.user_id.employee_id and
-                #           hasattr(ts.user_id.employee_id, 'hourly_cost') and ts.user_id.employee_id.hourly_cost):
-                #         cout_horaire = ts.user_id.employee_id.hourly_cost
-                #         _logger.debug(f"Coût via user->employee: {cout_horaire}")
-                    
-                #     if cout_horaire > 0:
-                #         cout_ligne = ts.unit_amount * cout_horaire
-                #         _logger.debug(f"Coût calculé timesheet {ts.id}: {ts.unit_amount}h × {cout_horaire} = {cout_ligne}")
-                
-                # # Méthode 3: Estimation si aucune donnée de coût n'est disponible
-                # if cout_ligne == 0 and hasattr(ts, 'unit_amount') and ts.unit_amount:
-                #     # Coût horaire moyen estimé (configurable)
-                #     cout_horaire_moyen = self._get_cout_horaire_moyen()
-                #     cout_ligne = ts.unit_amount * cout_horaire_moyen
-                #     _logger.debug(f"Coût estimé timesheet {ts.id}: {ts.unit_amount}h × {cout_horaire_moyen} = {cout_ligne}")
-                
-                cout_total += cout_ligne
+                if hasattr(ts, 'amount') and ts.amount:
+                    cout_total += abs(ts.amount)  # Prendre la valeur absolue
+                elif hasattr(ts, 'unit_amount') and hasattr(ts.employee_id, 'hourly_cost'):
+                    # Calcul basé sur le coût horaire si disponible
+                    cout_total += ts.unit_amount * (ts.employee_id.hourly_cost or 0)
             
-            _logger.info(f"Coût salarial total pour projet {projet.id}: {cout_total}")
             return cout_total
             
         except Exception as e:
-            _logger.error(f"Erreur calcul coût salarial projet {projet.id}: {str(e)}")
+            _logger.warning(f"Erreur calcul coût salarial projet {projet.id}: {str(e)}")
             return 0
-
-    def _get_cout_horaire_moyen(self):
-        """Récupère le coût horaire moyen ou utilise une estimation"""
-        try:
-            # Essayer de calculer un coût horaire moyen depuis les employés
-            if self._model_exists('hr.employee'):
-                employes = self.env['hr.employee'].search([
-                    ('hourly_cost', '>', 0)
-                ], limit=50)
-                
-                if employes:
-                    cout_moyen = sum(e.hourly_cost for e in employes) / len(employes)
-                    _logger.debug(f"Coût horaire moyen calculé: {cout_moyen}")
-                    return cout_moyen
-            
-            # Valeur par défaut configurable via paramètres système
-            cout_defaut = float(self.env['ir.config_parameter'].sudo().get_param(
-                'dashboard_projet.cout_horaire_defaut', '50.0'
-            ))
-            
-            _logger.debug(f"Coût horaire par défaut: {cout_defaut}")
-            return cout_defaut
-            
-        except Exception as e:
-            _logger.warning(f"Erreur calcul coût horaire moyen: {str(e)}")
-            return 50.0  # Valeur de fallback
 
     @api.model
     def get_marge_administrative(self, date_debut=None, date_fin=None):
@@ -438,10 +556,10 @@ class DashboardProjet(models.Model):
             taux_marge_admin = (marge_admin / ca_total * 100) if ca_total > 0 else 0
             
             result = {
-                'ca_total': float(ca_total),
-                'cout_admin': float(cout_admin),
-                'marge_admin': float(marge_admin),
-                'taux_marge_admin': round(float(taux_marge_admin), 2)
+                'ca_total': ca_total,
+                'cout_admin': cout_admin,
+                'marge_admin': marge_admin,
+                'taux_marge_admin': taux_marge_admin
             }
             
             _logger.info(f"Marge administrative calculée: {result}")
@@ -450,102 +568,54 @@ class DashboardProjet(models.Model):
         except Exception as e:
             _logger.error(f"Erreur calcul marge administrative: {str(e)}")
             return {
-                'ca_total': 0.0,
-                'cout_admin': 0.0,
-                'marge_admin': 0.0,
-                'taux_marge_admin': 0.0
+                'ca_total': 0,
+                'cout_admin': 0,
+                'marge_admin': 0,
+                'taux_marge_admin': 0
             }
 
     def _get_cout_administratif(self, date_debut=None, date_fin=None):
-        """Calcul des coûts administratifs - VERSION AMÉLIORÉE"""
+        """Calcul des coûts administratifs"""
         try:
             cout_admin = 0
             date_debut = self._parse_date(date_debut)
             date_fin = self._parse_date(date_fin)
             
-            # # Méthode 1: Via les employés administratifs et leurs timesheets
-            # if (self._model_exists('hr.employee') and 
-            #     self._model_exists('account.analytic.line')):
+            # Méthode 1: Via les employés administratifs
+            if (self._model_exists('hr.employee') and 
+                self._model_exists('account.analytic.line')):
                 
-            #     # Recherche des employés admin par département
-            #     admin_domain = []
-            #     if self._field_exists('hr.employee', 'department_id'):
-            #         admin_domain = [
-            #             '|', '|', '|',
-            #             ('department_id.name', 'ilike', 'admin'),
-            #             ('department_id.name', 'ilike', 'direction'),
-            #             ('department_id.name', 'ilike', 'comptab'),
-            #             ('department_id.name', 'ilike', 'finance')
-            #         ]
-            #     # Ou par type de poste
-            #     elif self._field_exists('hr.employee', 'job_id'):
-            #         admin_domain = [
-            #             '|', '|', '|',
-            #             ('job_id.name', 'ilike', 'admin'),
-            #             ('job_id.name', 'ilike', 'manager'),
-            #             ('job_id.name', 'ilike', 'comptab'),
-            #             ('job_id.name', 'ilike', 'director')
-            #         ]
-                
-            #     if admin_domain:
-            #         employes_admin = self.env['hr.employee'].search(admin_domain)
-            #         _logger.debug(f"Trouvé {len(employes_admin)} employés administratifs")
-                    
-            #         if employes_admin:
-            #             # Calculer leurs coûts via timesheets
-            #             for emp in employes_admin:
-            #                 domain_timesheet = [('employee_id', '=', emp.id)]
-                            
-            #                 if date_debut:
-            #                     domain_timesheet.append(('date', '>=', date_debut))
-            #                 if date_fin:
-            #                     domain_timesheet.append(('date', '<=', date_fin))
-                            
-            #                 timesheets_emp = self.env['account.analytic.line'].search(domain_timesheet)
-                            
-            #                 for ts in timesheets_emp:
-            #                     if hasattr(ts, 'amount') and ts.amount and ts.amount < 0:
-            #                         cout_admin += abs(ts.amount)
-            #                     elif (hasattr(ts, 'unit_amount') and ts.unit_amount and
-            #                           hasattr(emp, 'hourly_cost') and emp.hourly_cost):
-            #                         cout_admin += ts.unit_amount * emp.hourly_cost
-            
-            # Méthode 2: Via les comptes comptables de frais généraux
-            if cout_admin == 0 and self._model_exists('account.move.line'):
-                # Recherche des comptes de charges administratives
-                if self._model_exists('account.account'):
-                    comptes_admin = self.env['account.account'].search([
-                        '|', '|', '|', '|',
-                        ('code', 'like', '6%'),  # Comptes de charges
-                        ('name', 'ilike', 'admin'),
-                        ('name', 'ilike', 'frais généraux'),
-                        ('name', 'ilike', 'direction'),
-                        ('name', 'ilike', 'management')
+                # Recherche des employés admin
+                admin_domain = []
+                if self._field_exists('hr.employee', 'department_id'):
+                    admin_domain.extend([
+                        '|', ('department_id.name', 'ilike', 'admin'),
+                        ('department_id.name', 'ilike', 'direction')
                     ])
+                elif self._field_exists('hr.employee', 'job_id'):
+                    admin_domain.extend([
+                        '|', ('job_id.name', 'ilike', 'admin'),
+                        ('job_id.name', 'ilike', 'manager')
+                    ])
+                
+                if admin_domain:
+                    employes_admin = self.env['hr.employee'].search(admin_domain)
                     
-                    if comptes_admin:
-                        domain_charges = [
-                            ('account_id', 'in', comptes_admin.ids),
-                            ('move_id.state', '=', 'posted')
-                        ]
+                    if employes_admin:
+                        domain_timesheet = [('employee_id', 'in', employes_admin.ids)]
                         
                         if date_debut:
-                            domain_charges.append(('date', '>=', date_debut))
+                            domain_timesheet.append(('date', '>=', date_debut))
                         if date_fin:
-                            domain_charges.append(('date', '<=', date_fin))
+                            domain_timesheet.append(('date', '<=', date_fin))
                         
-                        lignes_charges = self.env['account.move.line'].search(domain_charges)
-                        cout_admin = sum(abs(ligne.debit - ligne.credit) for ligne in lignes_charges)
+                        timesheets_admin = self.env['account.analytic.line'].search(domain_timesheet)
+                        cout_admin = sum(abs(ts.amount) for ts in timesheets_admin if ts.amount)
             
-            # # Méthode 3: Pourcentage du CA si pas de données spécifiques
-            # if cout_admin == 0:
-            #     ca_total = self.get_chiffre_affaires(date_debut, date_fin)
-            #     # Récupérer le pourcentage depuis les paramètres système
-            #     pourcentage_admin = float(self.env['ir.config_parameter'].sudo().get_param(
-            #         'dashboard_projet.pourcentage_frais_admin', '15.0'
-            #     ))
-            #     cout_admin = ca_total * (pourcentage_admin / 100)
-            #     _logger.debug(f"Coût admin estimé à {pourcentage_admin}% du CA: {cout_admin}")
+            # Méthode 2: Pourcentage du CA si pas de données spécifiques
+            if cout_admin == 0:
+                ca_total = self.get_chiffre_affaires(date_debut, date_fin)
+                cout_admin = ca_total * 0.15  # Estimation 15% de coûts admin
             
             return cout_admin
             
@@ -553,355 +623,44 @@ class DashboardProjet(models.Model):
             _logger.warning(f"Erreur calcul coût administratif: {str(e)}")
             return 0
 
-    # Méthodes utilitaires
-    def _model_exists(self, model_name):
-        """Vérifie si un modèle existe"""
-        try:
-            return model_name in self.env
-        except:
-            return False
-
-    def _field_exists(self, model_name, field_name):
-        """Vérifie si un champ existe dans un modèle"""
-        try:
-            return (self._model_exists(model_name) and 
-                    field_name in self.env[model_name]._fields)
-        except:
-            return False
-
-    def _parse_date(self, date_input):
-        """Parse une date depuis string ou objet date"""
-        if not date_input:
-            return None
-        
-        try:
-            if isinstance(date_input, str):
-                return fields.Date.from_string(date_input)
-            return date_input
-        except:
-            return None
-
-    def _get_empty_marge(self):
-        """Retourne une structure de marge vide"""
-        return {
-            'revenus': 0.0,
-            'cout_salarial': 0.0,
-            'marge': 0.0,
-            'taux_marge': 0.0
-        }
-
     @api.model
-    def test_marge_calculation(self, projet_id, date_debut=None, date_fin=None):
-        """Méthode de test pour déboguer le calcul de marge - VERSION AMÉLIORÉE"""
+    def get_budget_comparison(self, date_debut=None, date_fin=None):
+        """Comparaison budget global vs réalisé"""
         try:
-            projet = self.env['project.project'].browse(projet_id)
-            if not projet.exists():
-                return {'error': 'Projet non trouvé'}
+            budget_total = 0
+            budget_consomme = 0
             
-            date_debut = self._parse_date(date_debut)
-            date_fin = self._parse_date(date_fin)
-            
-            # Calcul détaillé avec debug
-            revenus = self._get_ca_projet_optimized(projet, date_debut, date_fin)
-            cout_salarial = self._get_cout_salarial_projet(projet, date_debut, date_fin)
-            heures = self._get_heures_projet(projet, date_debut, date_fin)
-            
-            # Informations détaillées sur les timesheets
-            timesheet_info = {'count': 0, 'sample': [], 'detail_couts': []}
-            
-            if self._model_exists('account.analytic.line'):
-                domain = [('project_id', '=', projet.id)]
-                if date_debut:
-                    domain.append(('date', '>=', date_debut))
-                if date_fin:
-                    domain.append(('date', '<=', date_fin))
-                
-                timesheets = self.env['account.analytic.line'].search(domain, limit=20)
-                timesheet_info['count'] = len(timesheets)
-                
-                for ts in timesheets[:10]:  # Limiter aux 10 premiers
-                    ts_info = {
-                        'id': ts.id,
-                        'date': str(ts.date) if ts.date else None,
-                        'employee': ts.employee_id.name if ts.employee_id else None,
-                        'user': ts.user_id.name if ts.user_id else None,
-                        'hours': ts.unit_amount or 0,
-                        'amount': ts.amount or 0,
-                        'product': ts.product_id.name if ts.product_id else None
-                    }
-                    
-                    # Calcul du coût pour ce timesheet
-                    cout_ts = 0
-                    if ts.amount and ts.amount < 0:
-                        cout_ts = abs(ts.amount)
-                        ts_info['cout_methode'] = 'amount_direct'
-                    elif (ts.employee_id and ts.employee_id.hourly_cost and ts.unit_amount):
-                        cout_ts = ts.unit_amount * ts.employee_id.hourly_cost
-                        ts_info['cout_methode'] = 'hourly_cost'
-                        ts_info['hourly_cost'] = ts.employee_id.hourly_cost
-                    elif (ts.product_id and ts.product_id.standard_price and ts.unit_amount):
-                        cout_ts = ts.unit_amount * ts.product_id.standard_price
-                        ts_info['cout_methode'] = 'product_cost'
-                        ts_info['product_cost'] = ts.product_id.standard_price
-                    else:
-                        cout_ts = ts.unit_amount * 50.0  # Estimation
-                        ts_info['cout_methode'] = 'estimation'
-                    
-                    ts_info['cout_calcule'] = cout_ts
-                    timesheet_info['sample'].append(ts_info)
-            
-            # Test des méthodes de revenus
-            revenus_detail = {}
-            
-            # Test via factures
-            if (self._model_exists('account.move.line') and 
-                hasattr(projet, 'analytic_account_id') and projet.analytic_account_id):
-                
-                facture_domain = [
-                    ('move_id.state', '=', 'posted'),
-                    ('move_id.move_type', '=', 'out_invoice')
-                ]
-                
-                if self._field_exists('account.move.line', 'analytic_distribution'):
-                    lines = self.env['account.move.line'].search(facture_domain, limit=100)
-                    revenus_factures = 0
-                    for line in lines:
-                        if (line.analytic_distribution and 
-                            str(projet.analytic_account_id.id) in str(line.analytic_distribution)):
-                            revenus_factures += line.price_subtotal or 0
-                    revenus_detail['factures_analytique'] = revenus_factures
-                
-                elif self._field_exists('account.move.line', 'analytic_account_id'):
-                    facture_domain.append(('analytic_account_id', '=', projet.analytic_account_id.id))
-                    facture_lines = self.env['account.move.line'].search(facture_domain)
-                    revenus_detail['factures_direct'] = sum(l.price_subtotal for l in facture_lines if l.price_subtotal)
-            
-            # Test via commandes de vente
-            if self._model_exists('sale.order'):
-                if self._field_exists('sale.order', 'project_id'):
-                    commandes_projet = self.env['sale.order'].search([
-                        ('project_id', '=', projet.id),
-                        ('state', 'in', ['sale', 'done'])
-                    ])
-                    revenus_detail['commandes_projet'] = sum(c.amount_total for c in commandes_projet)
-                
-                if (self._field_exists('sale.order', 'analytic_account_id') and 
-                    hasattr(projet, 'analytic_account_id') and projet.analytic_account_id):
-                    commandes_analytique = self.env['sale.order'].search([
-                        ('analytic_account_id', '=', projet.analytic_account_id.id),
-                        ('state', 'in', ['sale', 'done'])
-                    ])
-                    revenus_detail['commandes_analytique'] = sum(c.amount_total for c in commandes_analytique)
-            
-            # Test via timesheets revenus
-            if self._model_exists('account.analytic.line'):
-                ts_revenus = self.env['account.analytic.line'].search([
-                    ('project_id', '=', projet.id),
-                    ('amount', '>', 0)
-                ])
-                revenus_detail['timesheets_revenus'] = sum(ts.amount for ts in ts_revenus)
-            
-            return {
-                'projet': {
-                    'id': projet.id,
-                    'name': projet.name,
-                    'analytic_account_id': projet.analytic_account_id.id if projet.analytic_account_id else None,
-                    'analytic_account_name': projet.analytic_account_id.name if projet.analytic_account_id else None
-                },
-                'calculs': {
-                    'revenus': float(revenus),
-                    'cout_salarial': float(cout_salarial),
-                    'heures': float(heures),
-                    'marge': float(revenus - cout_salarial),
-                    'taux_marge': float(((revenus - cout_salarial) / revenus * 100) if revenus > 0 else 0)
-                },
-                'revenus_detail': revenus_detail,
-                'timesheet_info': timesheet_info,
-                'parametres': {
-                    'date_debut': str(date_debut) if date_debut else None,
-                    'date_fin': str(date_fin) if date_fin else None,
-                    'cout_horaire_moyen': self._get_cout_horaire_moyen()
-                }
-            }
-            
-        except Exception as e:
-            _logger.error(f"Erreur test marge: {str(e)}")
-            return {'error': str(e), 'details': str(e.__class__.__name__)}
-
-    # Ajouter ces méthodes à la classe DashboardProjet
-
-    @api.model
-    def get_budget_data(self, date_debut=None, date_fin=None):
-        """Récupération des données budgétaires"""
-        try:
-            budget_data = {
-                'total_budget': 0.0,
-                'budget_utilise': 0.0,
-                'budget_restant': 0.0,
-                'taux_utilisation': 0.0,
-                'projets_budget': []
-            }
-            
-            if not self._model_exists('project.project'):
-                return budget_data
-            
-            # Récupérer les projets avec budget
-            domain = [('budget', '>', 0)]
-            if date_debut and self._field_exists('project.project', 'date_start'):
-                domain.append(('date_start', '>=', date_debut))
-            if date_fin and self._field_exists('project.project', 'date'):
-                domain.append(('date', '<=', date_fin))
-            
-            projets = self.env['project.project'].search(domain)
-            
-            total_budget = sum(projet.budget for projet in projets if projet.budget)
-            total_ca = 0
-            
-            for projet in projets:
-                ca_projet = self._get_ca_projet_optimized(projet, date_debut, date_fin)
-                total_ca += ca_projet
-                
-                taux_utilisation = (ca_projet / projet.budget * 100) if projet.budget > 0 else 0
-                
-                budget_data['projets_budget'].append({
-                    'id': projet.id,
-                    'name': projet.name,
-                    'budget': projet.budget,
-                    'ca_realise': ca_projet,
-                    'taux_utilisation': taux_utilisation,
-                    'budget_restant': max(0, projet.budget - ca_projet)
-                })
-            
-            budget_data['total_budget'] = total_budget
-            budget_data['budget_utilise'] = total_ca
-            budget_data['budget_restant'] = max(0, total_budget - total_ca)
-            budget_data['taux_utilisation'] = (total_ca / total_budget * 100) if total_budget > 0 else 0
-            
-            return budget_data
-            
-        except Exception as e:
-            _logger.error(f"Erreur récupération données budget: {str(e)}")
-            return {
-                'total_budget': 0.0,
-                'budget_utilise': 0.0,
-                'budget_restant': 0.0,
-                'taux_utilisation': 0.0,
-                'projets_budget': []
-            }
-
-    @api.model
-    def get_graphique_data(self, date_debut=None, date_fin=None):
-        """Prépare les données pour les graphiques"""
-        try:
-            # Données pour graphique à barres (CA par projet)
+            # Récupération des données projets avec budget
             projets_data = self.get_projets_data(date_debut, date_fin)
-            graphique_ca = {
-                'labels': [],
-                'data': [],
-                'backgroundColors': []
-            }
             
-            # Couleurs pour le graphique
-            colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', 
-                    '#20c997', '#fd7e14', '#e83e8c', '#6c757d', '#17a2b8']
-            
-            for i, projet in enumerate(projets_data):
-                if projet['ca'] > 0:  # N'afficher que les projets avec CA
-                    graphique_ca['labels'].append(projet['name'][:20] + '...' if len(projet['name']) > 20 else projet['name'])
-                    graphique_ca['data'].append(projet['ca'])
-                    graphique_ca['backgroundColors'].append(colors[i % len(colors)])
-            
-            # Données pour graphique circulaire (Répartition statuts)
-            statuts = {}
             for projet in projets_data:
-                statut = projet['stage']
-                statuts[statut] = statuts.get(statut, 0) + 1
+                budget_total += projet.get('budget_prevu', 0)
+                budget_consomme += projet.get('budget_consomme', 0)
             
-            graphique_statuts = {
-                'labels': list(statuts.keys()),
-                'data': list(statuts.values()),
-                'backgroundColors': colors[:len(statuts)]
+            # Calcul de l'écart global
+            ecart_budget = 0
+            if budget_total > 0:
+                ecart_budget = ((budget_consomme / budget_total) - 1) * 100
+            
+            result = {
+                'budget_total': budget_total,
+                'budget_consomme': budget_consomme,
+                'ecart_budget': ecart_budget,
+                'projets_budget': projets_data
             }
             
-            # Données pour graphique linéaire (Évolution mensuelle du CA)
-            graphique_evolution = self._get_evolution_mensuelle_ca(date_debut, date_fin)
-            
-            return {
-                'graphique_ca': graphique_ca,
-                'graphique_statuts': graphique_statuts,
-                'graphique_evolution': graphique_evolution
-            }
+            _logger.info(f"Comparaison budget calculée: {result}")
+            return result
             
         except Exception as e:
-            _logger.error(f"Erreur préparation données graphiques: {str(e)}")
+            _logger.error(f"Erreur comparaison budget: {str(e)}")
             return {
-                'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
-                'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
-                'graphique_evolution': {'labels': [], 'data': []}
+                'budget_total': 0,
+                'budget_consomme': 0,
+                'ecart_budget': 0,
+                'projets_budget': []
             }
 
-    def _get_evolution_mensuelle_ca(self, date_debut=None, date_fin=None):
-        """Calcule l'évolution mensuelle du CA"""
-        try:
-            if not self._model_exists('account.move'):
-                return {'labels': [], 'data': []}
-            
-            # Déterminer la plage de dates
-            if not date_debut:
-                date_debut = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-            if not date_fin:
-                date_fin = datetime.now().strftime('%Y-%m-%d')
-            
-            date_debut = self._parse_date(date_debut)
-            date_fin = self._parse_date(date_fin)
-            
-            # Générer tous les mois dans l'intervalle
-            current = date_debut.replace(day=1)
-            end = date_fin.replace(day=1)
-            months = []
-            
-            while current <= end:
-                months.append(current.strftime('%Y-%m'))
-                # Passer au mois suivant
-                if current.month == 12:
-                    current = current.replace(year=current.year + 1, month=1)
-                else:
-                    current = current.replace(month=current.month + 1)
-            
-            # Récupérer le CA pour chaque mois
-            ca_par_mois = []
-            for month in months:
-                start_date = datetime.strptime(month + '-01', '%Y-%m-%d')
-                if start_date.month == 12:
-                    end_date = start_date.replace(year=start_date.year + 1, month=1, day=1) - timedelta(days=1)
-                else:
-                    end_date = start_date.replace(month=start_date.month + 1, day=1) - timedelta(days=1)
-                
-                ca_mois = self.get_chiffre_affaires(
-                    start_date.strftime('%Y-%m-%d'),
-                    end_date.strftime('%Y-%m-%d')
-                )
-                ca_par_mois.append(ca_mois)
-            
-            # Formater les labels en français
-            mois_fr = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 
-                    'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
-            
-            labels = []
-            for month in months:
-                year, month_num = month.split('-')
-                labels.append(f"{mois_fr[int(month_num)-1]} {year}")
-            
-            return {
-                'labels': labels,
-                'data': ca_par_mois
-            }
-            
-        except Exception as e:
-            _logger.error(f"Erreur calcul évolution mensuelle CA: {str(e)}")
-            return {'labels': [], 'data': []}
-
-    # Mettre à jour la méthode get_dashboard_data pour inclure les nouvelles données
     @api.model
     def get_dashboard_data(self, date_debut=None, date_fin=None):
         """Méthode principale pour récupérer toutes les données du dashboard"""
@@ -909,31 +668,24 @@ class DashboardProjet(models.Model):
             _logger.info(f"Récupération données dashboard: {date_debut} à {date_fin}")
             
             result = {
-                'chiffre_affaires': 0.0,
+                'chiffre_affaires': 0,
                 'projets': [],
                 'marge_administrative': {
-                    'ca_total': 0.0,
-                    'cout_admin': 0.0,
-                    'marge_admin': 0.0,
-                    'taux_marge_admin': 0.0
+                    'ca_total': 0,
+                    'cout_admin': 0,
+                    'marge_admin': 0,
+                    'taux_marge_admin': 0
                 },
-                'budget_data': {
-                    'total_budget': 0.0,
-                    'budget_utilise': 0.0,
-                    'budget_restant': 0.0,
-                    'taux_utilisation': 0.0,
-                    'projets_budget': []
-                },
-                'graphique_data': {
-                    'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
-                    'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
-                    'graphique_evolution': {'labels': [], 'data': []}
+                'budget_comparison': {
+                    'budget_total': 0,
+                    'budget_consomme': 0,
+                    'ecart_budget': 0
                 }
             }
             
             # Calcul séquentiel avec gestion d'erreur
             try:
-                result['chiffre_affaires'] = float(self.get_chiffre_affaires(date_debut, date_fin))
+                result['chiffre_affaires'] = self.get_chiffre_affaires(date_debut, date_fin)
             except Exception as e:
                 _logger.error(f"Erreur CA: {str(e)}")
             
@@ -948,38 +700,101 @@ class DashboardProjet(models.Model):
                 _logger.error(f"Erreur marge admin: {str(e)}")
             
             try:
-                result['budget_data'] = self.get_budget_data(date_debut, date_fin)
+                result['budget_comparison'] = self.get_budget_comparison(date_debut, date_fin)
             except Exception as e:
-                _logger.error(f"Erreur données budget: {str(e)}")
-            
-            try:
-                result['graphique_data'] = self.get_graphique_data(date_debut, date_fin)
-            except Exception as e:
-                _logger.error(f"Erreur données graphiques: {str(e)}")
+                _logger.error(f"Erreur budget: {str(e)}")
             
             return result
             
         except Exception as e:
             _logger.error(f"Erreur critique dashboard: {str(e)}")
             return {
-                'chiffre_affaires': 0.0,
+                'chiffre_affaires': 0,
                 'projets': [],
                 'marge_administrative': {
-                    'ca_total': 0.0,
-                    'cout_admin': 0.0,
-                    'marge_admin': 0.0,
-                    'taux_marge_admin': 0.0
+                    'ca_total': 0,
+                    'cout_admin': 0,
+                    'marge_admin': 0,
+                    'taux_marge_admin': 0
                 },
-                'budget_data': {
-                    'total_budget': 0.0,
-                    'budget_utilise': 0.0,
-                    'budget_restant': 0.0,
-                    'taux_utilisation': 0.0,
-                    'projets_budget': []
-                },
-                'graphique_data': {
-                    'graphique_ca': {'labels': [], 'data': [], 'backgroundColors': []},
-                    'graphique_statuts': {'labels': [], 'data': [], 'backgroundColors': []},
-                    'graphique_evolution': {'labels': [], 'data': []}
+                'budget_comparison': {
+                    'budget_total': 0,
+                    'budget_consomme': 0,
+                    'ecart_budget': 0
                 }
             }
+
+    @api.model
+    def get_chart_data(self, date_debut=None, date_fin=None):
+        """Données spécifiques pour les graphiques"""
+        try:
+            projets_data = self.get_projets_data(date_debut, date_fin)
+            
+            # Évolution CA par mois (simulation)
+            ca_evolution = self._get_ca_evolution(date_debut, date_fin)
+            
+            # Répartition projets par statut
+            stages = {}
+            for projet in projets_data:
+                stage = projet.get('stage', 'Non défini')
+                stages[stage] = stages.get(stage, 0) + 1
+            
+            projets_by_stage = [{'stage': k, 'count': v} for k, v in stages.items()]
+            
+            # Marges par projet
+            marges_projets = []
+            for projet in projets_data:
+                if projet.get('marge_data'):
+                    marges_projets.append({
+                        'projet_name': projet['name'],
+                        'marge': projet['marge_data'].get('taux_marge', 0),
+                        'ca': projet.get('ca', 0)
+                    })
+            
+            # Budget vs réalisé
+            budget_comparison = []
+            for projet in projets_data:
+                budget_prevu = projet.get('budget_prevu', 0)
+                budget_consomme = projet.get('budget_consomme', 0)
+                if budget_prevu > 0:
+                    budget_comparison.append({
+                        'projet_name': projet['name'],
+                        'budget_prevu': budget_prevu,
+                        'budget_consomme': budget_consomme,
+                        'ecart': ((budget_consomme / budget_prevu - 1) * 100) if budget_prevu > 0 else 0
+                    })
+            
+            return {
+                'ca_evolution': ca_evolution,
+                'projets_by_stage': projets_by_stage,
+                'marges_projets': marges_projets,
+                'budget_comparison': budget_comparison
+            }
+            
+        except Exception as e:
+            _logger.error(f"Erreur données graphiques: {str(e)}")
+            return {
+                'ca_evolution': [],
+                'projets_by_stage': [],
+                'marges_projets': [],
+                'budget_comparison': []
+            }
+
+    def _get_ca_evolution(self, date_debut, date_fin):
+        """Génère les données d'évolution du CA par période"""
+        try:
+            if not date_debut or not date_fin:
+                return []
+            
+            date_debut = self._parse_date(date_debut)
+            date_fin = self._parse_date(date_fin)
+
+            # Simulation de données d'évolution CA
+            return [
+                {'date': date_debut, 'ca': 1000},
+                {'date': date_fin, 'ca': 1500}
+            ]
+
+        except Exception as e:
+            _logger.error(f"Erreur génération évolution CA: {str(e)}")
+            return []
