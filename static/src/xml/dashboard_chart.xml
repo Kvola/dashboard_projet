@@ -1,0 +1,331 @@
+<!-- Template Odoo pour l'intégration de l'export des graphiques -->
+<templates>
+    <!-- Extension du template principal du dashboard -->
+    <t t-extend="dashboard_projet.Dashboard">
+        
+        <!-- Ajouter les scripts requis dans le head -->
+        <t t-jquery="head" t-operation="append">
+            <!-- jsPDF pour génération PDF côté client -->
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+            <!-- jsPDF AutoTable pour les tableaux -->
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+        </t>
+
+        <!-- Ajouter les boutons d'export graphiques dans la barre d'outils -->
+        <t t-jquery=".dashboard-toolbar" t-operation="append">
+            <div class="btn-group ms-2" role="group" aria-label="Export Graphiques">
+                <button type="button" 
+                        class="btn btn-outline-primary dropdown-toggle" 
+                        data-bs-toggle="dropdown" 
+                        aria-expanded="false"
+                        t-att-disabled="state.loading ? 'disabled' : false">
+                    <i class="fa fa-chart-line me-1"></i>
+                    Export Graphiques
+                </button>
+                <ul class="dropdown-menu">
+                    <li>
+                        <h6 class="dropdown-header">Export Complet</h6>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" t-on-click="exportGraphiquesToPDF">
+                            <i class="fa fa-file-pdf text-danger me-2"></i>
+                            Tous les graphiques (PDF)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" t-on-click="exportAllGraphiquesAdvanced">
+                            <i class="fa fa-file-pdf text-danger me-2"></i>
+                            Rapport complet (PDF)
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"/></li>
+                    <li>
+                        <h6 class="dropdown-header">Export Individuel</h6>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" t-on-click="exportGraphiqueCA">
+                            <i class="fa fa-chart-bar text-primary me-2"></i>
+                            Graphique CA
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" t-on-click="exportGraphiqueStatuts">
+                            <i class="fa fa-chart-pie text-success me-2"></i>
+                            Graphique Statuts
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" t-on-click="exportGraphiqueEvolution">
+                            <i class="fa fa-chart-line text-info me-2"></i>
+                            Évolution CA
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"/></li>
+                    <li>
+                        <a class="dropdown-item" href="#" t-on-click="previewGraphiquesExport">
+                            <i class="fa fa-eye text-secondary me-2"></i>
+                            Prévisualiser
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </t>
+
+        <!-- Ajouter des boutons d'export individuels sur chaque graphique -->
+        <t t-jquery=".graphique-container" t-operation="prepend">
+            <div class="graphique-header d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0" t-esc="graphique_title"/>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" 
+                            class="btn btn-outline-secondary btn-sm"
+                            t-on-click="exportSingleGraphique"
+                            t-att-data-graphique="graphique_id"
+                            title="Exporter ce graphique">
+                        <i class="fa fa-download"></i>
+                    </button>
+                </div>
+            </div>
+        </t>
+
+        <!-- Section graphiques avec boutons d'export intégrés -->
+        <t t-jquery=".graphiques-section" t-operation="replace">
+            <div class="graphiques-section">
+                <div class="row">
+                    <!-- Graphique CA -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="fa fa-chart-bar text-primary me-2"></i>
+                                    CA par Projet
+                                </h5>
+                                <button type="button" 
+                                        class="btn btn-outline-primary btn-sm"
+                                        t-on-click="exportGraphiqueCA"
+                                        title="Exporter en PDF">
+                                    <i class="fa fa-file-pdf"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="graphique-ca"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Graphique Statuts -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="fa fa-chart-pie text-success me-2"></i>
+                                    Répartition par Statut
+                                </h5>
+                                <button type="button" 
+                                        class="btn btn-outline-success btn-sm"
+                                        t-on-click="exportGraphiqueStatuts"
+                                        title="Exporter en PDF">
+                                    <i class="fa fa-file-pdf"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="graphique-statuts"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Graphique Évolution -->
+                    <div class="col-12 mb-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="fa fa-chart-line text-info me-2"></i>
+                                    Évolution Mensuelle du CA
+                                </h5>
+                                <button type="button" 
+                                        class="btn btn-outline-info btn-sm"
+                                        t-on-click="exportGraphiqueEvolution"
+                                        title="Exporter en PDF">
+                                    <i class="fa fa-file-pdf"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div style="height: 400px; position: relative;">
+                                    <canvas id="graphique-evolution"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section actions globales -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Actions sur les Graphiques</h6>
+                                <div class="btn-group" role="group">
+                                    <button type="button" 
+                                            class="btn btn-primary"
+                                            t-on-click="exportAllGraphiquesAdvanced"
+                                            t-att-disabled="state.loadingStates.export ? 'disabled' : false">
+                                        <i class="fa fa-file-pdf me-1"></i>
+                                        <t t-if="state.loadingStates.export">
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                            Export en cours...
+                                        </t>
+                                        <t t-else="">
+                                            Exporter Rapport Complet
+                                        </t>
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-outline-secondary"
+                                            t-on-click="previewGraphiquesExport">
+                                        <i class="fa fa-eye me-1"></i>
+                                        Prévisualiser
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+
+        <!-- Ajouter des styles CSS personnalisés -->
+        <t t-jquery="head" t-operation="append">
+            <style>
+                /* Styles pour les graphiques et export */
+                .graphique-header {
+                    border-bottom: 1px solid #dee2e6;
+                    padding-bottom: 10px;
+                    margin-bottom: 15px;
+                }
+
+                .btn-export-graphique {
+                    opacity: 0.7;
+                    transition: opacity 0.3s ease;
+                }
+
+                .card:hover .btn-export-graphique {
+                    opacity: 1;
+                }
+
+                .export-loading {
+                    pointer-events: none;
+                    opacity: 0.6;
+                }
+
+                .export-status {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 9999;
+                    min-width: 250px;
+                }
+
+                /* Animation pour les boutons d'export */
+                .btn-export-animation {
+                    animation: pulse-export 0.6s ease-in-out;
+                }
+
+                @keyframes pulse-export {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+
+                /* Style pour la modal de prévisualisation */
+                .modal-preview-graphiques {
+                    background: rgba(0,0,0,0.8);
+                }
+
+                .modal-preview-graphiques .modal-dialog {
+                    max-width: 90%;
+                }
+
+                .preview-graphique-item {
+                    border: 2px solid #dee2e6;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    background: #fff;
+                }
+
+                .preview-graphique-item img {
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 4px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                /* Indicateur de statut d'export */
+                .export-progress {
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(255,255,255,0.95);
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    z-index: 10000;
+                    min-width: 300px;
+                    text-align: center;
+                }
+            </style>
+        </t>
+
+    </t>
+
+    <!-- Template pour la modal de prévisualisation -->
+    <t t-name="dashboard_projet.PreviewGraphiquesModal">
+        <div class="modal modal-preview-graphiques fade" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fa fa-eye me-2"></i>
+                            Prévisualisation Export Graphiques PDF
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle me-2"></i>
+                            <strong t-esc="graphiques.length"/> graphique(s) seront exportés dans le PDF.
+                        </div>
+                        
+                        <div class="row">
+                            <t t-foreach="graphiques" t-as="graphique" t-key="graphique.id">
+                                <div class="col-md-6 mb-3">
+                                    <div class="preview-graphique-item">
+                                        <h6 class="fw-bold mb-3" t-esc="graphique.title"/>
+                                        <img t-att-src="graphique.imageData" class="w-100" t-att-alt="graphique.title"/>
+                                        <div class="mt-2 text-muted small">
+                                            Dimensions: <span t-esc="graphique.dimensions.width"/>x<span t-esc="graphique.dimensions.height"/>px
+                                        </div>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fa fa-times me-1"></i>
+                            Annuler
+                        </button>
+                        <button type="button" class="btn btn-primary" t-on-click="confirmExportPDF" data-bs-dismiss="modal">
+                            <i class="fa fa-file-pdf me-1"></i>
+                            Exporter en PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

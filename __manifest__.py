@@ -25,17 +25,22 @@
     "data": [
         "security/ir.model.access.csv",
         "views/dashboard_views.xml",
-        #"views/assets.xml",
-        #"views/menu.xml",
     ],
     "assets": {
         "web.assets_backend": [
+            # Charger jsPDF en premier
+            "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js",
+            
+            # Chart.js
+            "https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js",
+            
+            # Vos fichiers
             "dashboard_projet/static/src/css/dashboard.css",
             "dashboard_projet/static/src/js/dashboard_service.js",
             "dashboard_projet/static/src/js/dashboard_component.js",
             "dashboard_projet/static/src/xml/dashboard.xml",
-            # Inclure Chart.js depuis CDN ou local
-            'https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js',
+            "dashboard_projet/static/src/xml/dashboard_chart.xml",
         ],
     },
     "installable": True,
